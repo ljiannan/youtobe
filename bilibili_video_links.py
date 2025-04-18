@@ -21,6 +21,8 @@ def get_bilibili_videos(up_id):
     options.add_argument('--disable-extensions')
     options.add_experimental_option('excludeSwitches', ['enable-automation'])
     options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument('--headless=new')
+    options.add_argument('--disable-gpu')
 
     # 设置浏览器
     service = Service(r"D:\chrom driver\chrom driver\chromedriver.exe")
@@ -401,7 +403,7 @@ def extract_user_id(url):
 
 def main():
     # 请替换为实际的UP主主页链接
-    up_main_url = "https://space.bilibili.com/27901809/search?keyword=%E5%BB%B6%E6%97%B6%E6%91%84%E5%BD%B1"
+    up_main_url = "https://space.bilibili.com/486032117/upload/video"
 
     # 提取UP主ID - 注意修正路径为标准的/video而非/upload/video
     user_id = extract_user_id(up_main_url)
