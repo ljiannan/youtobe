@@ -11,84 +11,86 @@ from datetime import datetime
 from urllib.parse import urlparse
 from functools import lru_cache
 from typing import Dict, List, Tuple, Optional, Any
+import random
 
 # ===================== 配置区域 =====================
 url_list = {
-"https://www.youtube.com/watch?v=w9OIvIeP3W4": "Omni Foundation",
-"https://www.youtube.com/watch?v=d6vhqNyZZzo": "Omni Foundation",
-"https://www.youtube.com/watch?v=9m2u2_WXn0A": "Omni Foundation",
-"https://www.youtube.com/watch?v=OYtQzuYg7RU": "Omni Foundation",
-"https://www.youtube.com/watch?v=v7iKy0Ly01M": "Omni Foundation",
-"https://www.youtube.com/watch?v=RoXBU9Kh3fY&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=k4GPcXHrxUA": "Omni Foundation",
-"https://www.youtube.com/watch?v=Q6VRB9xvimI": "Omni Foundation",
-"https://www.youtube.com/watch?v=zgKYpLLlF7k&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=sOObHVOl6PY": "Omni Foundation",
-"https://www.youtube.com/watch?v=jHlZUPqx0tE": "Omni Foundation",
-"https://www.youtube.com/watch?v=ZeW3zW_cxGk": "Omni Foundation",
-"https://www.youtube.com/watch?v=fkNsgMxwoqg": "Omni Foundation",
-"https://www.youtube.com/watch?v=kGSkfgaNRcg": "Omni Foundation",
-"https://www.youtube.com/watch?v=PpbqGWM9bnQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=pMiERPAhs-4": "Omni Foundation",
-"https://www.youtube.com/watch?v=CSMu9ib_nls": "Omni Foundation",
-"https://www.youtube.com/watch?v=hGVJzOhMKsw": "Omni Foundation",
-"https://www.youtube.com/watch?v=Iz54GekE5Bw": "Omni Foundation",
-"https://www.youtube.com/watch?v=5IneR3Dy_-E": "Omni Foundation",
-"https://www.youtube.com/watch?v=fUlTpBciGr4": "Omni Foundation",
-"https://www.youtube.com/watch?v=7ebjfSsiKwQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=UTQhqDKe1x4&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=T1S5AsBNkSs": "Omni Foundation",
-"https://www.youtube.com/watch?v=T33_Ve63ccw&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=ESUr0BMPCOI": "Omni Foundation",
-"https://www.youtube.com/watch?v=9gkLlwyiap4": "Omni Foundation",
-"https://www.youtube.com/watch?v=tS4C3ykqY4M": "Omni Foundation",
-"https://www.youtube.com/watch?v=YN_rFF0SGYE": "Omni Foundation",
-"https://www.youtube.com/watch?v=eH-Tx90TVYY": "Omni Foundation",
-"https://www.youtube.com/watch?v=yxI71ptAoMY": "Omni Foundation",
-"https://www.youtube.com/watch?v=HvCWPhRYPgs": "Omni Foundation",
-"https://www.youtube.com/watch?v=_F6HPttVazk": "Omni Foundation",
-"https://www.youtube.com/watch?v=CftrHCiyfmg": "Omni Foundation",
-"https://www.youtube.com/watch?v=B6lFH59I5Oc": "Omni Foundation",
-"https://www.youtube.com/watch?v=YBTYDVBRjJs": "Omni Foundation",
-"https://www.youtube.com/watch?v=SshnbfG8zBI": "Omni Foundation",
-"https://www.youtube.com/watch?v=ksRzttaXwpc": "Omni Foundation",
-"https://www.youtube.com/watch?v=KxxhLeVL5_Y": "Omni Foundation",
-"https://www.youtube.com/watch?v=sc7WHRPfKdg": "Omni Foundation",
-"https://www.youtube.com/watch?v=UXciBiD9Csg": "Omni Foundation",
-"https://www.youtube.com/watch?v=ovofkQniwuQ&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=gQS5T-dl6-E&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=k7Ho5g3hGiM": "Omni Foundation",
-"https://www.youtube.com/watch?v=pWStK9HBUOc": "Omni Foundation",
-"https://www.youtube.com/watch?v=KnmdI_XUxAs": "Omni Foundation",
-"https://www.youtube.com/watch?v=wSoSTVQ2oDo": "Omni Foundation",
-"https://www.youtube.com/watch?v=3Dw17ofSFag&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=uOFFQXvHN4g": "Omni Foundation",
-"https://www.youtube.com/watch?v=pql42pc__CI": "Omni Foundation",
-"https://www.youtube.com/watch?v=ASQMFI6zjXQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=bm4hqUFDzYU": "Omni Foundation",
-"https://www.youtube.com/watch?v=0ZdVdnbnwNs": "Omni Foundation",
-"https://www.youtube.com/watch?v=tONvdf-mo2Y": "Omni Foundation",
-"https://www.youtube.com/watch?v=_BgEbcSdFQE": "Omni Foundation",
-"https://www.youtube.com/watch?v=R814Aa2ppjc": "Omni Foundation",
-"https://www.youtube.com/watch?v=V4ww21JE_YU": "Omni Foundation",
-"https://www.youtube.com/watch?v=b2gDCh-KTKE": "Omni Foundation",
-"https://www.youtube.com/watch?v=DXddIB5v1nc": "Omni Foundation",
-"https://www.youtube.com/watch?v=rNEOpGuFQGo": "Omni Foundation",
-"https://www.youtube.com/watch?v=zwzjLeQIokE": "Omni Foundation",
-"https://www.youtube.com/watch?v=ULaVA0kp1vQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=aFZr-pF7knk": "Omni Foundation",
-"https://www.youtube.com/watch?v=OyV2hC1QhDA": "Omni Foundation",
-"https://www.youtube.com/watch?v=muFcUtlLufQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=ZdqCMmncSVM": "Omni Foundation",
-"https://www.youtube.com/watch?v=kYAiTtSmOkg": "Omni Foundation",
-"https://www.youtube.com/watch?v=dJ8OL72w9Nc": "Omni Foundation",
-"https://www.youtube.com/watch?v=CDWdcWpPcIY": "Omni Foundation",
-"https://www.youtube.com/watch?v=-giDY77lxg4": "Omni Foundation",
-"https://www.youtube.com/watch?v=50mZLkJHEKY": "Omni Foundation",
-"https://www.youtube.com/watch?v=NVRMTgHKRRI": "Omni Foundation",
-"https://www.youtube.com/watch?v=sXNDa1GdIm0": "Omni Foundation",
-"https://www.youtube.com/watch?v=w2uQR_NmB2E": "Omni Foundation",
-"https://www.youtube.com/watch?v=YpR1avMAX78": "Omni Foundation",
+# "https://www.youtube.com/watch?v=e26zZ83Oh6Y":"Omni Foundation",
+# "https://www.youtube.com/watch?v=w9OIvIeP3W4": "Omni Foundation",
+# "https://www.youtube.com/watch?v=d6vhqNyZZzo": "Omni Foundation",
+# "https://www.youtube.com/watch?v=9m2u2_WXn0A": "Omni Foundation",
+# "https://www.youtube.com/watch?v=OYtQzuYg7RU": "Omni Foundation",
+# "https://www.youtube.com/watch?v=v7iKy0Ly01M": "Omni Foundation",
+# "https://www.youtube.com/watch?v=RoXBU9Kh3fY&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=k4GPcXHrxUA": "Omni Foundation",
+# "https://www.youtube.com/watch?v=Q6VRB9xvimI": "Omni Foundation",
+# "https://www.youtube.com/watch?v=zgKYpLLlF7k&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=sOObHVOl6PY": "Omni Foundation",
+# "https://www.youtube.com/watch?v=jHlZUPqx0tE": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ZeW3zW_cxGk": "Omni Foundation",
+# "https://www.youtube.com/watch?v=fkNsgMxwoqg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=kGSkfgaNRcg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=PpbqGWM9bnQ": "Omni Foundation",
+# "https://www.youtube.com/watch?v=pMiERPAhs-4": "Omni Foundation",
+# "https://www.youtube.com/watch?v=CSMu9ib_nls": "Omni Foundation",
+# "https://www.youtube.com/watch?v=hGVJzOhMKsw": "Omni Foundation",
+# "https://www.youtube.com/watch?v=Iz54GekE5Bw": "Omni Foundation",
+# "https://www.youtube.com/watch?v=5IneR3Dy_-E": "Omni Foundation",
+# "https://www.youtube.com/watch?v=fUlTpBciGr4": "Omni Foundation",
+# "https://www.youtube.com/watch?v=7ebjfSsiKwQ": "Omni Foundation",
+# "https://www.youtube.com/watch?v=UTQhqDKe1x4&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=T1S5AsBNkSs": "Omni Foundation",
+# "https://www.youtube.com/watch?v=T33_Ve63ccw&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ESUr0BMPCOI": "Omni Foundation",
+# "https://www.youtube.com/watch?v=9gkLlwyiap4": "Omni Foundation",
+# "https://www.youtube.com/watch?v=tS4C3ykqY4M": "Omni Foundation",
+# "https://www.youtube.com/watch?v=YN_rFF0SGYE": "Omni Foundation",
+# "https://www.youtube.com/watch?v=eH-Tx90TVYY": "Omni Foundation",
+# "https://www.youtube.com/watch?v=yxI71ptAoMY": "Omni Foundation",
+# "https://www.youtube.com/watch?v=HvCWPhRYPgs": "Omni Foundation",
+# "https://www.youtube.com/watch?v=_F6HPttVazk": "Omni Foundation",
+# "https://www.youtube.com/watch?v=CftrHCiyfmg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=B6lFH59I5Oc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=YBTYDVBRjJs": "Omni Foundation",
+# "https://www.youtube.com/watch?v=SshnbfG8zBI": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ksRzttaXwpc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=KxxhLeVL5_Y": "Omni Foundation",
+# "https://www.youtube.com/watch?v=sc7WHRPfKdg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=UXciBiD9Csg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ovofkQniwuQ&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=gQS5T-dl6-E&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=k7Ho5g3hGiM": "Omni Foundation",
+# "https://www.youtube.com/watch?v=pWStK9HBUOc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=KnmdI_XUxAs": "Omni Foundation",
+# "https://www.youtube.com/watch?v=wSoSTVQ2oDo": "Omni Foundation",
+# "https://www.youtube.com/watch?v=3Dw17ofSFag&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
+# "https://www.youtube.com/watch?v=uOFFQXvHN4g": "Omni Foundation",
+# "https://www.youtube.com/watch?v=pql42pc__CI": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ASQMFI6zjXQ": "Omni Foundation",
+# "https://www.youtube.com/watch?v=bm4hqUFDzYU": "Omni Foundation",
+# "https://www.youtube.com/watch?v=0ZdVdnbnwNs": "Omni Foundation",
+# "https://www.youtube.com/watch?v=tONvdf-mo2Y": "Omni Foundation",
+# "https://www.youtube.com/watch?v=_BgEbcSdFQE": "Omni Foundation",
+# "https://www.youtube.com/watch?v=R814Aa2ppjc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=V4ww21JE_YU": "Omni Foundation",
+# "https://www.youtube.com/watch?v=b2gDCh-KTKE": "Omni Foundation",
+# "https://www.youtube.com/watch?v=DXddIB5v1nc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=rNEOpGuFQGo": "Omni Foundation",
+# "https://www.youtube.com/watch?v=zwzjLeQIokE": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ULaVA0kp1vQ": "Omni Foundation",
+# "https://www.youtube.com/watch?v=aFZr-pF7knk": "Omni Foundation",
+# "https://www.youtube.com/watch?v=OyV2hC1QhDA": "Omni Foundation",
+# "https://www.youtube.com/watch?v=muFcUtlLufQ": "Omni Foundation",
+# "https://www.youtube.com/watch?v=ZdqCMmncSVM": "Omni Foundation",
+# "https://www.youtube.com/watch?v=kYAiTtSmOkg": "Omni Foundation",
+# "https://www.youtube.com/watch?v=dJ8OL72w9Nc": "Omni Foundation",
+# "https://www.youtube.com/watch?v=CDWdcWpPcIY": "Omni Foundation",
+# "https://www.youtube.com/watch?v=-giDY77lxg4": "Omni Foundation",
+# "https://www.youtube.com/watch?v=50mZLkJHEKY": "Omni Foundation",
+# "https://www.youtube.com/watch?v=NVRMTgHKRRI": "Omni Foundation",
+# "https://www.youtube.com/watch?v=sXNDa1GdIm0": "Omni Foundation",
+# "https://www.youtube.com/watch?v=w2uQR_NmB2E": "Omni Foundation",
+# "https://www.youtube.com/watch?v=YpR1avMAX78": "Omni Foundation",
 "https://www.youtube.com/watch?v=d1DgInHD99E": "Omni Foundation",
 "https://www.youtube.com/watch?v=nXynRKiTijA": "Omni Foundation",
 "https://www.youtube.com/watch?v=0uJns7Aa3Fs": "Omni Foundation",
@@ -170,7 +172,6 @@ url_list = {
 "https://www.youtube.com/watch?v=CfM6LSVTeNo&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
 "https://www.youtube.com/watch?v=7ePAC2Rx36w": "Omni Foundation",
 "https://www.youtube.com/watch?v=ZBX_MySIyWc": "Omni Foundation",
-"https://www.youtube.com/watch?v=oBGKHwFANxs": "Omni Foundation",
 "https://www.youtube.com/watch?v=UDxn0J_hhHE&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
 "https://www.youtube.com/watch?v=2q645CQNwkU": "Lucas Imbiriba",
 "https://www.youtube.com/watch?v=7g90gEP9vuQ": "Lucas Imbiriba",
@@ -235,6 +236,7 @@ url_list = {
 "https://www.youtube.com/watch?v=oSoreXUT0bs&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
 "https://www.youtube.com/watch?v=EOa1lluacj0": "Lucas Imbiriba",
 "https://www.youtube.com/watch?v=dhFRA-9xXEs": "Lucas Imbiriba",
+
 "https://www.youtube.com/watch?v=lrULMp_kh00": "Miyagawa Haruna Official",
 "https://www.youtube.com/watch?v=Lkv7ktXfzqE": "Miyagawa Haruna Official",
 "https://www.youtube.com/watch?v=D8-rO9pBED0&pp=0gcJCX4JAYcqIYzv": "Miyagawa Haruna Official",
@@ -249,7 +251,6 @@ url_list = {
 "https://www.youtube.com/watch?v=UxCoB1fef78": "Miyagawa Haruna Official",
 "https://www.youtube.com/watch?v=z77o8iF3CD4": "Miyagawa Haruna Official",
 "https://www.youtube.com/watch?v=Yo-rLqzgod0": "Miyagawa Haruna Official",
-
 }
 
 # 配置信息
@@ -258,7 +259,7 @@ CONFIG = {
         "youtube": r"C:\Users\DELL\Desktop\youtube.txt",
         "bilibili": r"C:\Users\DELL\Desktop\bilibili.txt"
     },
-    "output_base": r"E:\0418\音效下载",  # 下载根目录
+    "output_base": r"H:\0421音效乐器采集",  # 下载根目录
     "log_path": r"C:\Users\DELL\Desktop\cam-prcess-data-1\logs",  # 日志目录
     "max_retries": 3,  # 单个视频最大重试次数
     "max_workers": 3,  # 并行下载数量
@@ -356,9 +357,9 @@ def get_ydl_opts(platform: str, output_path: str, task_id: int) -> Dict[str, Any
         return {
             **common_opts,
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
-            'cookiefile': CONFIG["cookies"]['youtube'],
+            'cookiefile': CONFIG["cookies"]["youtube"],
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9'
             }
         }
@@ -391,6 +392,8 @@ async def download_video(url: str, title: str, task_id: int) -> bool:
 
         # 获取下载配置
         ydl_opts = get_ydl_opts(platform, output_path, task_id)
+        if platform == 'youtube':
+            await asyncio.sleep(random.uniform(2, 5))
 
         # 在线程池中运行实际下载（避免阻塞事件循环）
         loop = asyncio.get_event_loop()
@@ -408,7 +411,11 @@ async def download_video(url: str, title: str, task_id: int) -> bool:
 
                 except Exception as e:
                     logger.error(f"❌ 下载失败 (尝试 {attempt + 1}/{CONFIG['max_retries']}): {str(e)}")
-                    if attempt == CONFIG["max_retries"] - 1:
+                    if attempt < CONFIG["max_retries"] - 1:
+                        delay = 2 ** (attempt + 1)
+                        logger.info(f"等待 {delay} 秒后重试...")
+                        await asyncio.sleep(delay)
+                    else:
                         logger.error(f"⚠️ 放弃下载: {url}")
                         return False
 
