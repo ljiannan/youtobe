@@ -12,246 +12,47 @@ from urllib.parse import urlparse
 from functools import lru_cache
 from typing import Dict, List, Tuple, Optional, Any
 import random
+import json
+import pathlib
+import re
 
 # ===================== 配置区域 =====================
-url_list = {
-# "https://www.youtube.com/watch?v=e26zZ83Oh6Y":"Omni Foundation",
-# "https://www.youtube.com/watch?v=w9OIvIeP3W4": "Omni Foundation",
-# "https://www.youtube.com/watch?v=d6vhqNyZZzo": "Omni Foundation",
-# "https://www.youtube.com/watch?v=9m2u2_WXn0A": "Omni Foundation",
-# "https://www.youtube.com/watch?v=OYtQzuYg7RU": "Omni Foundation",
-# "https://www.youtube.com/watch?v=v7iKy0Ly01M": "Omni Foundation",
-# "https://www.youtube.com/watch?v=RoXBU9Kh3fY&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=k4GPcXHrxUA": "Omni Foundation",
-# "https://www.youtube.com/watch?v=Q6VRB9xvimI": "Omni Foundation",
-# "https://www.youtube.com/watch?v=zgKYpLLlF7k&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=sOObHVOl6PY": "Omni Foundation",
-# "https://www.youtube.com/watch?v=jHlZUPqx0tE": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ZeW3zW_cxGk": "Omni Foundation",
-# "https://www.youtube.com/watch?v=fkNsgMxwoqg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=kGSkfgaNRcg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=PpbqGWM9bnQ": "Omni Foundation",
-# "https://www.youtube.com/watch?v=pMiERPAhs-4": "Omni Foundation",
-# "https://www.youtube.com/watch?v=CSMu9ib_nls": "Omni Foundation",
-# "https://www.youtube.com/watch?v=hGVJzOhMKsw": "Omni Foundation",
-# "https://www.youtube.com/watch?v=Iz54GekE5Bw": "Omni Foundation",
-# "https://www.youtube.com/watch?v=5IneR3Dy_-E": "Omni Foundation",
-# "https://www.youtube.com/watch?v=fUlTpBciGr4": "Omni Foundation",
-# "https://www.youtube.com/watch?v=7ebjfSsiKwQ": "Omni Foundation",
-# "https://www.youtube.com/watch?v=UTQhqDKe1x4&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=T1S5AsBNkSs": "Omni Foundation",
-# "https://www.youtube.com/watch?v=T33_Ve63ccw&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ESUr0BMPCOI": "Omni Foundation",
-# "https://www.youtube.com/watch?v=9gkLlwyiap4": "Omni Foundation",
-# "https://www.youtube.com/watch?v=tS4C3ykqY4M": "Omni Foundation",
-# "https://www.youtube.com/watch?v=YN_rFF0SGYE": "Omni Foundation",
-# "https://www.youtube.com/watch?v=eH-Tx90TVYY": "Omni Foundation",
-# "https://www.youtube.com/watch?v=yxI71ptAoMY": "Omni Foundation",
-# "https://www.youtube.com/watch?v=HvCWPhRYPgs": "Omni Foundation",
-# "https://www.youtube.com/watch?v=_F6HPttVazk": "Omni Foundation",
-# "https://www.youtube.com/watch?v=CftrHCiyfmg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=B6lFH59I5Oc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=YBTYDVBRjJs": "Omni Foundation",
-# "https://www.youtube.com/watch?v=SshnbfG8zBI": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ksRzttaXwpc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=KxxhLeVL5_Y": "Omni Foundation",
-# "https://www.youtube.com/watch?v=sc7WHRPfKdg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=UXciBiD9Csg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ovofkQniwuQ&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=gQS5T-dl6-E&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=k7Ho5g3hGiM": "Omni Foundation",
-# "https://www.youtube.com/watch?v=pWStK9HBUOc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=KnmdI_XUxAs": "Omni Foundation",
-# "https://www.youtube.com/watch?v=wSoSTVQ2oDo": "Omni Foundation",
-# "https://www.youtube.com/watch?v=3Dw17ofSFag&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-# "https://www.youtube.com/watch?v=uOFFQXvHN4g": "Omni Foundation",
-# "https://www.youtube.com/watch?v=pql42pc__CI": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ASQMFI6zjXQ": "Omni Foundation",
-# "https://www.youtube.com/watch?v=bm4hqUFDzYU": "Omni Foundation",
-# "https://www.youtube.com/watch?v=0ZdVdnbnwNs": "Omni Foundation",
-# "https://www.youtube.com/watch?v=tONvdf-mo2Y": "Omni Foundation",
-# "https://www.youtube.com/watch?v=_BgEbcSdFQE": "Omni Foundation",
-# "https://www.youtube.com/watch?v=R814Aa2ppjc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=V4ww21JE_YU": "Omni Foundation",
-# "https://www.youtube.com/watch?v=b2gDCh-KTKE": "Omni Foundation",
-# "https://www.youtube.com/watch?v=DXddIB5v1nc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=rNEOpGuFQGo": "Omni Foundation",
-# "https://www.youtube.com/watch?v=zwzjLeQIokE": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ULaVA0kp1vQ": "Omni Foundation",
-# "https://www.youtube.com/watch?v=aFZr-pF7knk": "Omni Foundation",
-# "https://www.youtube.com/watch?v=OyV2hC1QhDA": "Omni Foundation",
-# "https://www.youtube.com/watch?v=muFcUtlLufQ": "Omni Foundation",
-# "https://www.youtube.com/watch?v=ZdqCMmncSVM": "Omni Foundation",
-# "https://www.youtube.com/watch?v=kYAiTtSmOkg": "Omni Foundation",
-# "https://www.youtube.com/watch?v=dJ8OL72w9Nc": "Omni Foundation",
-# "https://www.youtube.com/watch?v=CDWdcWpPcIY": "Omni Foundation",
-# "https://www.youtube.com/watch?v=-giDY77lxg4": "Omni Foundation",
-# "https://www.youtube.com/watch?v=50mZLkJHEKY": "Omni Foundation",
-# "https://www.youtube.com/watch?v=NVRMTgHKRRI": "Omni Foundation",
-# "https://www.youtube.com/watch?v=sXNDa1GdIm0": "Omni Foundation",
-# "https://www.youtube.com/watch?v=w2uQR_NmB2E": "Omni Foundation",
-# "https://www.youtube.com/watch?v=YpR1avMAX78": "Omni Foundation",
-"https://www.youtube.com/watch?v=d1DgInHD99E": "Omni Foundation",
-"https://www.youtube.com/watch?v=nXynRKiTijA": "Omni Foundation",
-"https://www.youtube.com/watch?v=0uJns7Aa3Fs": "Omni Foundation",
-"https://www.youtube.com/watch?v=Neb19_C6Gwk": "Omni Foundation",
-"https://www.youtube.com/watch?v=uaproJS4yxE&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=qek9r-dqP68": "Omni Foundation",
-"https://www.youtube.com/watch?v=W-YHFjDUvx4": "Omni Foundation",
-"https://www.youtube.com/watch?v=JxexB-ZOylk": "Omni Foundation",
-"https://www.youtube.com/watch?v=LgxVUui4_8c": "Omni Foundation",
-"https://www.youtube.com/watch?v=cKp9ugv-_5I": "Omni Foundation",
-"https://www.youtube.com/watch?v=Vgr7pHtIJx0": "Omni Foundation",
-"https://www.youtube.com/watch?v=N4HFGfa6MtY": "Omni Foundation",
-"https://www.youtube.com/watch?v=L6GBc7BEPIw&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=HCpGrLq4AjM": "Omni Foundation",
-"https://www.youtube.com/watch?v=WxKCgidspgc": "Omni Foundation",
-"https://www.youtube.com/watch?v=6lLDSXGPQDU": "Omni Foundation",
-"https://www.youtube.com/watch?v=GRc_n5LnxJE": "Omni Foundation",
-"https://www.youtube.com/watch?v=ZJUMnj1a6JM": "Omni Foundation",
-"https://www.youtube.com/watch?v=Gnlo7yvycxs": "Omni Foundation",
-"https://www.youtube.com/watch?v=r9IX6mZfnFk": "Omni Foundation",
-"https://www.youtube.com/watch?v=NQ7TlVfDHVY": "Omni Foundation",
-"https://www.youtube.com/watch?v=fu41tbQG6xI": "Omni Foundation",
-"https://www.youtube.com/watch?v=XQF5E4vnldQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=vPG8BnvB6aM": "Omni Foundation",
-"https://www.youtube.com/watch?v=g2Jn9BcwKRI": "Omni Foundation",
-"https://www.youtube.com/watch?v=s0uUnd7jNFk&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=toxEX-CDZyY": "Omni Foundation",
-"https://www.youtube.com/watch?v=cG5eD1o4wVA&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=Q4c9WEc6UBg": "Omni Foundation",
-"https://www.youtube.com/watch?v=-q1MwWARzqw": "Omni Foundation",
-"https://www.youtube.com/watch?v=m3aYFAZzjnw&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=-ku-_ibgPLo": "Omni Foundation",
-"https://www.youtube.com/watch?v=dVgQglYmSsc": "Omni Foundation",
-"https://www.youtube.com/watch?v=Mqc8HkHcMYw": "Omni Foundation",
-"https://www.youtube.com/watch?v=l5j9Xgz0_JM": "Omni Foundation",
-"https://www.youtube.com/watch?v=qiOmRs0ZuEE": "Omni Foundation",
-"https://www.youtube.com/watch?v=3ExslFDv6Co": "Omni Foundation",
-"https://www.youtube.com/watch?v=_J5aZIt_9-A": "Omni Foundation",
-"https://www.youtube.com/watch?v=0iz-r6wP-Ww": "Omni Foundation",
-"https://www.youtube.com/watch?v=aRmTn7_aXWU": "Omni Foundation",
-"https://www.youtube.com/watch?v=n0o7TU3sFNQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=xqU-oiMsCcU": "Omni Foundation",
-"https://www.youtube.com/watch?v=44fqqySSaS4": "Omni Foundation",
-"https://www.youtube.com/watch?v=RxBHzAaVdCY": "Omni Foundation",
-"https://www.youtube.com/watch?v=4SztAEtphlU": "Omni Foundation",
-"https://www.youtube.com/watch?v=DZh8rcIkNEY&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=Sw6NK9MqqU4": "Omni Foundation",
-"https://www.youtube.com/watch?v=yr_sGrqhdBg": "Omni Foundation",
-"https://www.youtube.com/watch?v=FUnJBR5kR0I": "Omni Foundation",
-"https://www.youtube.com/watch?v=_XxCU7mghj8": "Omni Foundation",
-"https://www.youtube.com/watch?v=OosoIH6osS0": "Omni Foundation",
-"https://www.youtube.com/watch?v=1JUfPhrX_S4": "Omni Foundation",
-"https://www.youtube.com/watch?v=GmAdrrlfQdg": "Omni Foundation",
-"https://www.youtube.com/watch?v=NTB0EABbMw8&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=5fG6gDStP14": "Omni Foundation",
-"https://www.youtube.com/watch?v=QJ-vnR8T8mE": "Omni Foundation",
-"https://www.youtube.com/watch?v=dO1vKl-SO9Y": "Omni Foundation",
-"https://www.youtube.com/watch?v=bHmbPxr29wc": "Omni Foundation",
-"https://www.youtube.com/watch?v=DtER8Q7Lic0": "Omni Foundation",
-"https://www.youtube.com/watch?v=pMSqqs4cTNA&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=NAVkBARgigo": "Omni Foundation",
-"https://www.youtube.com/watch?v=gEHv2mGWeVo": "Omni Foundation",
-"https://www.youtube.com/watch?v=e26zZ83Oh6Y": "Omni Foundation",
-"https://www.youtube.com/watch?v=ItZ6o3PgERc": "Omni Foundation",
-"https://www.youtube.com/watch?v=JawqxFrdysY": "Omni Foundation",
-"https://www.youtube.com/watch?v=xfzKoyJ25Xo": "Omni Foundation",
-"https://www.youtube.com/watch?v=DpY2oNDuoFo": "Omni Foundation",
-"https://www.youtube.com/watch?v=tpjek5pZcH8": "Omni Foundation",
-"https://www.youtube.com/watch?v=D6wjD4ekJBg": "Omni Foundation",
-"https://www.youtube.com/watch?v=tOMetQ68wPI": "Omni Foundation",
-"https://www.youtube.com/watch?v=ZeJLGgxLeLQ": "Omni Foundation",
-"https://www.youtube.com/watch?v=NMmD0nDQFgM": "Omni Foundation",
-"https://www.youtube.com/watch?v=DdnixrsNgms": "Omni Foundation",
-"https://www.youtube.com/watch?v=f6eTz5919Q0": "Omni Foundation",
-"https://www.youtube.com/watch?v=Znc3DE81Tj4": "Omni Foundation",
-"https://www.youtube.com/watch?v=rIjxgCH_pGw": "Omni Foundation",
-"https://www.youtube.com/watch?v=1c4--1pvqNU": "Omni Foundation",
-"https://www.youtube.com/watch?v=cBUnTfyxIoA": "Omni Foundation",
-"https://www.youtube.com/watch?v=CfM6LSVTeNo&pp=0gcJCX4JAYcqIYzv": "Omni Foundation",
-"https://www.youtube.com/watch?v=7ePAC2Rx36w": "Omni Foundation",
-"https://www.youtube.com/watch?v=ZBX_MySIyWc": "Omni Foundation",
-"https://www.youtube.com/watch?v=UDxn0J_hhHE&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=2q645CQNwkU": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=7g90gEP9vuQ": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=nBVnzdca-EA": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=iIpVJi2qNy8": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=35I0xiIfp5k": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=5z-ZMx-WGGw": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=BnyVtP7YQi0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=xpRgR-tZEpk": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=sS1WYIu_gA4": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=Pp1Vims_oTk": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=DyjPdNFEZC0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=zkZnWFUMrlA": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=ZwhPhs5SapY": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=KPAozB2o0HE": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=DY9S84LGuls": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=Azzc5odj9V4": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=o0U3mVKLTOk": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=ejmv82QOqKw": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=cfzcrw7SvPY": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=x5oweOmARFQ": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=IhvXQfAND2M": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=AkPsnw7l3wM&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=knXeAYanK3w": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=Vmd5q1mwi-E": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=nvkMaIp6Bc0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=Yu9rdOmGqVI&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=IoAxyyJkBbU": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=NOIxac4zDKI": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=S_IchSH3xks": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=BmS0JXlizH0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=zqjyFfjHcdU": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=vkVL2je3nAk&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=OHkmmdCz8-w": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=q6rc-JO3F40": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=f31gDOHSGBY": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=abHAhKm4XdM": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=uZwEW_jCtr0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=fSl2R8emBtE": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=sna803rDilU": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=V6YNEZ7sudM": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=TfXZ1n6HUeI&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=GX4QpPzEfSE&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=8G_rsnXh3vU&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=kmhV9KGsgoc": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=My_4AS_kxM8": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=53CciCfpwQI": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=aaSjv7Xo33c": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=G1I12v5Tcwc": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=B4FNlVA1piI": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=KN_8KnvWiAg": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=7ISCEZUkHBo": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=l5wecD_RL7I": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=rrmQdNL2V5o": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=MW7r1Nz6d2U&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=UPZrqnAoVxc": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=JZnogFQzROs": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=LCcGFjSWCO4": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=eNZYDD0NkgM": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=h7T4IhrUGu4": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=lf5Aupb-w8o": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=oSoreXUT0bs&pp=0gcJCX4JAYcqIYzv": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=EOa1lluacj0": "Lucas Imbiriba",
-"https://www.youtube.com/watch?v=dhFRA-9xXEs": "Lucas Imbiriba",
-
-"https://www.youtube.com/watch?v=lrULMp_kh00": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=Lkv7ktXfzqE": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=D8-rO9pBED0&pp=0gcJCX4JAYcqIYzv": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=z-r4bMd1mZs": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=13_Nr6fWtEI&pp=0gcJCX4JAYcqIYzv": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=W_953NF3htU": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=HWmiTWs20NM": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=Ui7_8IH134w": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=e6reJVRUCFo": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=SD8BOb85GM0": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=iqnbdFlrPgc": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=UxCoB1fef78": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=z77o8iF3CD4": "Miyagawa Haruna Official",
-"https://www.youtube.com/watch?v=Yo-rLqzgod0": "Miyagawa Haruna Official",
-}
+# 从文件读取URL列表
+def load_url_list_from_file(file_path: str) -> Dict[str, str]:
+    """从文本文件读取URL列表
+    
+    文件格式: 每行一个URL和标题，用制表符分隔
+    例如: https://www.youtube.com/watch?v=abcdef123456\t视频标题
+    """
+    result = {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):  # 跳过空行和注释
+                    parts = line.split('\t', 1)  # 使用制表符分割URL和标题
+                    if len(parts) == 2:
+                        url, title = parts
+                        result[url.strip()] = title.strip()
+                    else:
+                        # 如果没有标题，使用URL作为标题的依据，但需要清理
+                        url = parts[0].strip()
+                        # 从URL中提取视频ID作为标题
+                        if 'youtube' in url or 'youtu.be' in url:
+                            video_id = url.split('v=')[-1].split('&')[0] if 'v=' in url else url.split('/')[-1]
+                            result[url] = f"youtube_{video_id}"
+                        elif 'bilibili' in url:
+                            video_id = url.split('/')[-1]
+                            result[url] = f"bilibili_{video_id}"
+                        else:
+                            # 为其他URL创建安全的标题
+                            safe_title = re.sub(r'[\\/:*?"<>|]', '_', url)
+                            result[url] = safe_title
+        return result
+    except Exception as e:
+        # 由于logger在后面才定义，这里使用logging模块直接记录错误
+        logging.error(f"读取URL列表失败: {str(e)}")
+        return {}
 
 # 配置信息
 CONFIG = {
@@ -262,10 +63,14 @@ CONFIG = {
     "output_base": r"H:\0421音效乐器采集",  # 下载根目录
     "log_path": r"C:\Users\DELL\Desktop\cam-prcess-data-1\logs",  # 日志目录
     "max_retries": 3,  # 单个视频最大重试次数
-    "max_workers": 3,  # 并行下载数量
+    "max_workers": 1,  # 并行下载数量
     "timeout": 600,  # 下载超时(秒)
+    "downloaded_record": r"C:\Users\DELL\Desktop\cam-prcess-data-1\downloaded_videos.json",  # 已下载视频记录文件
+    "url_list_file": r"C:\Users\DELL\Desktop\新建 文本文档 (3).txt",  # URL列表文件路径
 }
 
+# 加载URL列表
+url_list = load_url_list_from_file(CONFIG["url_list_file"])
 
 # ===================================================
 
@@ -407,6 +212,8 @@ async def download_video(url: str, title: str, task_id: int) -> bool:
 
                     await loop.run_in_executor(pool, download)
                     logger.info(f"✅ 下载成功: {url}")
+                    # 保存已下载视频记录
+                    save_downloaded_video(url)
                     return True
 
                 except Exception as e:
@@ -424,19 +231,59 @@ async def download_video(url: str, title: str, task_id: int) -> bool:
         return False
 
 
+# 已下载视频记录
+def load_downloaded_videos() -> set:
+    """加载已下载视频记录"""
+    record_file = CONFIG["downloaded_record"]
+    if os.path.exists(record_file):
+        try:
+            with open(record_file, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except Exception as e:
+            logger.error(f"读取下载记录失败: {str(e)}")
+    return set()
+
+def save_downloaded_video(url: str):
+    """保存已下载视频记录"""
+    record_file = CONFIG["downloaded_record"]
+    downloaded = load_downloaded_videos()
+    downloaded.add(url)
+    try:
+        # 确保目录存在
+        pathlib.Path(record_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(record_file, 'w', encoding='utf-8') as f:
+            json.dump(list(downloaded), f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"保存下载记录失败: {str(e)}")
+
+
 async def download_manager():
     """管理并发下载"""
+    # 加载已下载视频记录
+    downloaded_videos = load_downloaded_videos()
+    
     logger.info("=" * 50)
     logger.info("视频下载任务启动")
     logger.info(f"总任务数: {len(url_list)}")
     logger.info(f"并行下载数: {CONFIG['max_workers']}")
+    logger.info(f"已下载视频数: {len(downloaded_videos)}")
     logger.info("=" * 50)
 
     # 创建任务列表
     tasks = []
     for idx, (url, title) in enumerate(url_list.items(), 1):
+        # 跳过已下载的视频
+        if url in downloaded_videos:
+            logger.info(f"跳过已下载视频: {url} - {title}")
+            continue
+            
         task = download_video(url, title, idx)
         tasks.append(task)
+
+    # 如果没有任务需要执行，直接返回
+    if not tasks:
+        logger.info("没有新视频需要下载")
+        return
 
     # 分批执行下载任务
     results = []
@@ -457,6 +304,9 @@ async def download_manager():
 def main():
     """程序入口点"""
     try:
+        # 打印加载的URL信息
+        logger.info(f"已从 {CONFIG['url_list_file']} 加载 {len(url_list)} 个URL")
+        
         # 运行异步下载管理器
         asyncio.run(download_manager())
     except KeyboardInterrupt:
