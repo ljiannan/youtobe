@@ -23,7 +23,7 @@ from colorama import Fore, Back, Style
 # B站UP主的URL
 UP_MAIN_URL = "https://space.bilibili.com/30222835/upload/video"
 
-# B站Cookie文件路径
+# B站Cookie文件路径(json形式导出)
 COOKIE_FILE_PATH = r"C:\Users\DELL\Desktop\bilibili.txt"
 
 # ChromeDriver路径
