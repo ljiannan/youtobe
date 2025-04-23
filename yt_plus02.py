@@ -211,13 +211,38 @@ async def download_video(url: str, title: str, task_id: int) -> bool:
                             return ydl.download([url])
 
                     await loop.run_in_executor(pool, download)
+                    
+                    # 检查是否实际下载了视频文件
+                    files = os.listdir(output_path)
+                    video_files = [f for f in files if f.endswith(('.mp4', '.webm', '.mkv'))]
+                    
+                    if not video_files:
+                        # 如果目录为空或只有非视频文件，可能是碰到了人机验证
+                        logger.error(f"⚠️ 可能碰到人机验证，目录中没有找到视频文件: {output_path}")
+                        return False
+                    
+                    # 检查视频文件大小是否为0
+                    for video_file in video_files:
+                        file_path = os.path.join(output_path, video_file)
+                        if os.path.getsize(file_path) < 10240:  # 小于10KB的视频文件视为异常
+                            logger.error(f"⚠️ 视频文件大小异常，可能是人机验证: {file_path}")
+                            return False
+                    
                     logger.info(f"✅ 下载成功: {url}")
                     # 保存已下载视频记录
                     save_downloaded_video(url)
                     return True
 
                 except Exception as e:
-                    logger.error(f"❌ 下载失败 (尝试 {attempt + 1}/{CONFIG['max_retries']}): {str(e)}")
+                    error_message = str(e)
+                    logger.error(f"❌ 下载失败 (尝试 {attempt + 1}/{CONFIG['max_retries']}): {error_message}")
+                    
+                    # 检测是否是人机验证错误
+                    if "429" in error_message or "bot" in error_message.lower() or "sign in" in error_message.lower():
+                        logger.error(f"⚠️ 检测到人机验证限制，下次运行时将重试此视频: {url}")
+                        # 如果遇到人机验证，直接返回失败，以便下次重试
+                        return False
+                        
                     if attempt < CONFIG["max_retries"] - 1:
                         delay = 2 ** (attempt + 1)
                         logger.info(f"等待 {delay} 秒后重试...")
