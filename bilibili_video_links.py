@@ -11,418 +11,474 @@ import json
 import os
 import traceback
 import random
+import pickle
 
 
-def load_cookies(driver, cookie_file):
-    """从文件加载cookies并应用到浏览器"""
+# 添加保存和加载Cookie的功能
+def save_cookies(driver, path):
+    """保存浏览器Cookies到文件"""
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+    with open(path, 'wb') as file:
+        pickle.dump(driver.get_cookies(), file)
+    print(f"Cookies已保存到: {path}")
+
+
+def load_cookies(driver, path):
+    """从文件加载Cookies到浏览器"""
+    if not os.path.exists(path):
+        print(f"Cookie文件不存在: {path}")
+        return False
+    
     try:
-        # 首先确保访问bilibili.com根域名，这对cookie设置很重要
-        print("首先访问B站首页以确保正确设置cookie...")
-        driver.get("https://www.bilibili.com")
-        time.sleep(5)  # 增加等待时间确保页面完全加载
-        
-        # 检查cookies文件是否存在
-        if not os.path.exists(cookie_file):
-            print(f"警告: Cookie文件不存在: {cookie_file}")
-            return False
-            
-        print(f"正在从 {cookie_file} 加载cookies...")
-        
+        # 尝试使用pickle加载二进制cookie
         try:
-            with open(cookie_file, 'r', encoding='utf-8') as f:
-                cookie_content = f.read().strip()
-        except UnicodeDecodeError:
-            # 尝试其他编码
-            with open(cookie_file, 'r', encoding='gbk') as f:
-                cookie_content = f.read().strip()
+            with open(path, 'rb') as file:
+                cookies = pickle.load(file)
+        except:
+            # 如果失败，尝试作为文本文件读取
+            cookies = []
+            with open(path, 'r', encoding='utf-8') as file:
+                try:
+                    # 尝试作为JSON解析
+                    cookies = json.loads(file.read())
+                except:
+                    # 尝试按行解析cookie
+                    lines = file.readlines()
+                    for line in lines:
+                        if '=' in line:
+                            name, value = line.strip().split('=', 1)
+                            cookies.append({'name': name, 'value': value})
         
-        # 检查文件是否为空
-        if not cookie_content:
-            print("Cookie文件为空")
-            return False
-            
-        print(f"读取到cookie内容长度: {len(cookie_content)}")
-        
-        # 清除所有现有cookies
-        driver.delete_all_cookies()
-        print("已清除现有cookies")
-        
-        # 首先尝试解析为JSON格式
-        cookies_added = 0
-        try:
-            # 检查是否为JSON数组格式
-            if cookie_content.startswith('[') and cookie_content.endswith(']'):
-                cookies = json.loads(cookie_content)
-                for cookie in cookies:
-                    # 确保cookie格式正确
-                    if isinstance(cookie, dict) and 'name' in cookie and 'value' in cookie:
-                        # 处理domain字段
-                        if 'domain' not in cookie or not cookie['domain']:
-                            cookie['domain'] = '.bilibili.com'
-                        elif cookie['domain'].startswith('.'):
-                            # 保持原样
-                            pass
-                        elif cookie['domain'].startswith('bilibili.com'):
-                            cookie['domain'] = '.bilibili.com' 
-                        elif cookie['domain'].startswith('www.bilibili.com'):
-                            cookie['domain'] = '.bilibili.com'
-                            
-                        # 确保path字段
-                        if 'path' not in cookie:
-                            cookie['path'] = '/'
-                            
-                        try:
-                            # 移除可能导致问题的字段
-                            for key in ['sameSite', 'storeId', 'id', 'hostOnly', 'expirationDate']:
-                                if key in cookie:
-                                    del cookie[key]
-                            
-                            # 打印cookie详情用于调试
-                            print(f"尝试添加cookie: {cookie['name']} = {cookie['value'][:5]}... (domain:{cookie['domain']})")
-                            
-                            driver.add_cookie(cookie)
-                            cookies_added += 1
-                        except Exception as e:
-                            print(f"添加cookie时出错 [{cookie['name']}]: {e}")
-            # 检查是否为单个JSON对象
-            elif cookie_content.startswith('{') and cookie_content.endswith('}'):
-                cookie = json.loads(cookie_content)
-                if 'cookies' in cookie:  # 某些导出格式可能包含cookies键
-                    for c in cookie['cookies']:
-                        try:
-                            if 'domain' not in c or not c['domain']:
-                                c['domain'] = '.bilibili.com'
-                            elif c['domain'].startswith('bilibili.com'):
-                                c['domain'] = '.bilibili.com'
-                            
-                            # 确保path字段
-                            if 'path' not in c:
-                                c['path'] = '/'
-                                
-                            # 移除可能导致问题的字段
-                            for key in ['sameSite', 'storeId', 'id', 'hostOnly', 'expirationDate']:
-                                if key in c:
-                                    del c[key]
-                                    
-                            print(f"尝试添加cookie: {c['name']} = {c['value'][:5]}... (domain:{c['domain']})")
-                            driver.add_cookie(c)
-                            cookies_added += 1
-                        except Exception as e:
-                            print(f"添加cookie时出错: {e}")
-                else:
-                    # 单个cookie对象
-                    if 'domain' not in cookie or not cookie['domain']:
-                        cookie['domain'] = '.bilibili.com'
-                    elif cookie['domain'].startswith('bilibili.com'):
-                        cookie['domain'] = '.bilibili.com'
-                        
-                    # 确保path字段
-                    if 'path' not in cookie:
-                        cookie['path'] = '/'
-                        
-                    # 移除可能导致问题的字段
-                    for key in ['sameSite', 'storeId', 'id', 'hostOnly', 'expirationDate']:
-                        if key in cookie:
-                            del cookie[key]
-                            
-                    print(f"尝试添加单个cookie对象")
-                    driver.add_cookie(cookie)
-                    cookies_added += 1
-        except json.JSONDecodeError:
-            print("不是JSON格式，尝试解析为Netscape或字符串格式...")
-            
-            # 尝试解析为Netscape格式的cookie (NetScape格式通常是.txt文件，每行一个cookie)
-            # 示例: domain\tHTTP-ONLY\tpath\tSECURE\texpiry\tname\tvalue
-            if '\t' in cookie_content:
-                lines = cookie_content.split('\n')
-                for line in lines:
-                    if line.startswith('#') or not line.strip():  # 跳过注释行和空行
-                        continue
-                    
-                    try:
-                        parts = line.split('\t')
-                        if len(parts) >= 7:  # Netscape格式至少有7个字段
-                            domain, http_only, path, secure, expiry, name, value = parts[:7]
-                            
-                            # 修复domain，确保以.开头
-                            if domain and not domain.startswith('.') and not domain.startswith('http'):
-                                domain = '.' + domain
-                                
-                            cookie_dict = {
-                                'name': name,
-                                'value': value,
-                                'domain': domain if domain else '.bilibili.com',
-                                'path': path if path else '/',
-                                'secure': secure.lower() == 'true',
-                                'httpOnly': http_only.lower() == 'true'
-                            }
-                            if expiry and expiry != '0':
-                                cookie_dict['expiry'] = int(expiry)
-                                
-                            print(f"尝试添加Netscape格式cookie: {name}")
-                            driver.add_cookie(cookie_dict)
-                            cookies_added += 1
-                    except Exception as e:
-                        print(f"解析Netscape格式cookie行时出错: {e}")
-            else:
-                # 尝试解析为简单的键值对字符串格式 (name=value; name=value)
-                cookie_list = cookie_content.split(';')
-                for cookie_pair in cookie_list:
-                    if '=' in cookie_pair:
-                        try:
-                            name, value = cookie_pair.split('=', 1)
-                            name = name.strip()
-                            value = value.strip()
-                            
-                            # 跳过空值
-                            if not name or not value:
-                                continue
-                                
-                            cookie_dict = {
-                                'name': name,
-                                'value': value,
-                                'domain': '.bilibili.com',
-                                'path': '/'
-                            }
-                            print(f"尝试添加简单格式cookie: {name}")
-                            driver.add_cookie(cookie_dict)
-                            cookies_added += 1
-                        except Exception as e:
-                            print(f"添加简单格式cookie时出错: {e}")
-        
-        print(f"成功添加 {cookies_added} 个cookies")
-        
-        # 验证cookie是否设置成功
-        print("Cookies加载完成，刷新页面并验证...")
-        driver.refresh()
-        time.sleep(5)
-        
-        # 打印当前所有cookies用于调试
-        current_cookies = driver.get_cookies()
-        print(f"当前浏览器中的cookies数量: {len(current_cookies)}")
-        for i, c in enumerate(current_cookies[:5]):  # 只显示前5个
-            print(f"Cookie {i+1}: {c['name']} = {c['value'][:5]}... (domain:{c.get('domain', 'N/A')})")
-        
-        # 检查关键cookie是否存在
-        bili_jct = None
-        sessdata = None
-        
-        for c in current_cookies:
-            if c['name'].lower() == 'bili_jct':
-                bili_jct = c['value']
-            elif c['name'].lower() == 'sessdata':
-                sessdata = c['value']
+        # 添加cookie到浏览器
+        for cookie in cookies:
+            # 某些站点可能需要处理domain
+            if isinstance(cookie, dict):  # 确保cookie是字典
+                if 'domain' in cookie:
+                    if cookie['domain'].startswith('.'):
+                        cookie['domain'] = cookie['domain']
+                    else:
+                        cookie['domain'] = '.' + cookie['domain']
                 
-        if bili_jct and sessdata:
-            print("找到关键登录cookie: bili_jct 和 SESSDATA")
-            # 如果找到了关键cookie，就认为登录成功，简化检测逻辑
-            return True
-        else:
-            print("警告: 未找到关键登录cookie")
-            if not bili_jct:
-                print("- 缺少 bili_jct cookie")
-            if not sessdata: 
-                print("- 缺少 SESSDATA cookie")
-        
-        # 进行简单检查
-        try:
-            print("尝试查找登录状态元素...")
-            # 保存页面截图以供调试
-            save_debug_screenshot(driver, "login_check.png")
-            
-            # 尝试查找表示已登录的元素 - 使用更多选择器
-            login_selectors = [
-                ".user-name", ".username", ".nav-user-name", ".user-info-name",
-                ".avatar-name", ".user-nickname", ".user-name-wrap", ".account-info",
-                ".login-name", ".vip-name", "[data-v-logged='true']"
-            ]
-            
-            for selector in login_selectors:
                 try:
-                    elems = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elems:
-                        for elem in elems:
-                            if elem.is_displayed():
-                                print(f"找到登录状态元素: {selector} => {elem.text}")
-                                return True
-                except:
-                    continue
-                    
-            # 检查是否有账号ID元素
-            dedeuser_value = None
-            for c in current_cookies:
-                if c['name'] == 'DedeUserID':
-                    dedeuser_value = c['value']
-                    print(f"从cookie找到用户ID: {dedeuser_value}")
-                    if dedeuser_value:  # 如果找到用户ID，也可以认为是登录状态
-                        return True
-                        
-            # 查找头像元素也可以表示登录状态
-            avatar_selectors = [
-                ".avatar", ".user-avatar", ".bili-avatar", ".v-img", 
-                "img.avatar", "[class*='avatar']"
-            ]
+                    driver.add_cookie(cookie)
+                except Exception as e:
+                    print(f"添加Cookie时出错: {e}")
             
-            for selector in avatar_selectors:
-                try:
-                    avatars = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if avatars:
-                        for avatar in avatars:
-                            if avatar.is_displayed():
-                                print(f"找到头像元素，可能已登录: {selector}")
-                                return True
-                except:
-                    continue
-                    
-            print("未找到明确的登录状态元素，但如果有关键cookie，仍可继续运行")
-            return bool(bili_jct and sessdata)  # 如果有关键cookie，返回True
-        except Exception as e:
-            print(f"检查登录状态时出错: {e}")
-            # 仍然继续，因为有关键cookie就可以了
-            return bool(bili_jct and sessdata)
+        print(f"成功加载Cookies")
+        return True
     except Exception as e:
-        print(f"加载cookies时出错: {e}")
-        traceback.print_exc()
+        print(f"加载Cookies时出错: {e}")
         return False
 
 
-def save_debug_screenshot(driver, filename, folder="debug_screenshots"):
-    """保存调试截图"""
-    try:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        path = os.path.join(folder, filename)
-        driver.save_screenshot(path)
-        print(f"已保存调试截图: {path}")
-    except Exception as e:
-        print(f"保存截图时出错: {e}")
-
-
-def scroll_page(driver, scroll_pause_time=2):
-    """滚动页面以加载更多内容"""
-    print("开始滚动页面以加载更多内容...")
+def manual_login(driver):
+    """手动登录B站账号"""
+    print("=" * 50)
+    print("请在浏览器中手动登录B站账号")
+    print("登录成功后，请在此输入任意键继续...")
+    print("=" * 50)
+    input("等待登录完成，按Enter继续...")
     
-    # 获取初始页面高度
+    # 检查登录状态
+    try:
+        # 检查是否有头像元素，这通常表示已登录
+        avatar = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".header-avatar, .user-con .avatar"))
+        )
+        print("检测到登录成功")
+        return True
+    except:
+        print("未检测到登录状态，可能登录失败")
+        return False
+
+
+def get_video_count(driver):
+    """获取UP主视频总数"""
+    try:
+        # 尝试多种可能的选择器
+        count_selectors = [
+            ".n-statistics .n-data:first-child .n-data-v",  # 2024年新版个人空间
+            ".n-statistics__first .n-data__value",          # 新版备选
+            ".video-count",                                 # 旧版视频计数
+            ".sub-item .count",                            # 可能的数量显示
+            ".channel-item .count",                        # 频道数量
+            ".channel-item .num",                          # 频道视频数
+            ".sub-title .count"                            # 子标题中的数量
+        ]
+
+        for selector in count_selectors:
+            try:
+                count_elem = driver.find_element(By.CSS_SELECTOR, selector)
+                count_text = count_elem.text.strip()
+                # 处理中文"万"
+                if "万" in count_text:
+                    count = float(count_text.replace("万", "")) * 10000
+                else:
+                    count = int(re.sub(r'\D', '', count_text))
+                print(f"获取到视频计数: {count_text} -> {count}")
+                return count
+            except:
+                continue
+                
+        # 尝试从页面源码中提取视频数量
+        page_source = driver.page_source
+        count_patterns = [
+            r'"videoCount":(\d+)',             # JSON格式可能包含的计数
+            r'"video_count":(\d+)',            # 另一种JSON格式
+            r'视频[^\d]*(\d+)[^\d]*个',         # 中文文本格式
+            r'(\d+)[^\d]*投稿',                # 另一种中文表述
+            r'(\d+)[^\d]*视频'                 # 简单中文表述
+        ]
+        
+        for pattern in count_patterns:
+            match = re.search(pattern, page_source)
+            if match:
+                count = int(match.group(1))
+                print(f"从源码提取到视频计数: {count}")
+                return count
+                
+        print("未能获取视频计数，默认为30")
+        return 30
+    except Exception as e:
+        print(f"获取视频计数出错: {e}")
+        return 30
+
+
+def get_total_pages(driver):
+    """获取总页数"""
+    try:
+        # 尝试多种可能的分页选择器
+        pagination_selectors = [
+            ".paginationjs-pages ul li",            # 常见的分页样式
+            ".pagination .page-item",               # Bootstrap风格分页
+            ".be-pager-item",                       # B站旧版分页
+            ".n-pager__item",                       # B站新版分页
+            ".pages li",                            # 简单分页
+            "[class*='pagination'] [class*='item']" # 通用选择器
+        ]
+        
+        for selector in pagination_selectors:
+            try:
+                page_items = driver.find_elements(By.CSS_SELECTOR, selector)
+                if page_items:
+                    numbers = []
+                    for item in page_items:
+                        try:
+                            text = item.text.strip()
+                            if text and text.isdigit():
+                                numbers.append(int(text))
+                        except:
+                            pass
+                    
+                    if numbers:
+                        max_page = max(numbers)
+                        print(f"从分页元素检测到总页数: {max_page}")
+                        return max_page
+            except:
+                continue
+                
+        # 尝试从页面源码中提取页数信息
+        page_source = driver.page_source
+        page_patterns = [
+            r'"page":{"count":(\d+)',              # JSON格式中的页数信息
+            r'"totalPage":(\d+)',                  # 另一种JSON格式
+            r'"pageCount":(\d+)',                  # 另一种表示
+            r'共\s*(\d+)\s*页'                      # 中文文本表示
+        ]
+        
+        for pattern in page_patterns:
+            match = re.search(pattern, page_source)
+            if match:
+                total_pages = int(match.group(1))
+                print(f"从源码提取到总页数: {total_pages}")
+                return total_pages
+                
+        print("未能检测到总页数，默认为1页")
+        return 1
+    except Exception as e:
+        print(f"获取总页数出错: {e}")
+        return 1
+
+
+def scroll_page(driver):
+    """逐步滚动页面以加载所有内容"""
+    print("开始滚动页面以加载所有内容...")
+    
+    # 获取页面高度
     last_height = driver.execute_script("return document.body.scrollHeight")
     
-    # 记录滚动前的视频数
-    videos_before = len(driver.find_elements(By.CSS_SELECTOR, 
-                                           '.bili-video-card, .small-item, .video-page-card, [data-v-code]'))
-    print(f"滚动前视频数: {videos_before}")
+    # 滚动次数
+    scroll_attempts = 0
+    max_attempts = 10
     
-    # 已滚动次数和最大滚动次数
-    scroll_count = 0
-    max_scrolls = 20  # 可以根据需要调整
-    no_new_content_count = 0
-    
-    while scroll_count < max_scrolls:
-        # 向下滚动
+    while scroll_attempts < max_attempts:
+        # 滚动到页面底部
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         
-        # 等待页面加载
-        time.sleep(scroll_pause_time)
-        scroll_count += 1
-        
-        # 输出进度
-        print(f"滚动 {scroll_count}/{max_scrolls}...")
+        # 等待内容加载
+        time.sleep(2)
         
         # 获取新的页面高度
         new_height = driver.execute_script("return document.body.scrollHeight")
         
-        # 获取当前视频数
-        videos_now = len(driver.find_elements(By.CSS_SELECTOR, 
-                                            '.bili-video-card, .small-item, .video-page-card, [data-v-code]'))
-        
-        print(f"当前视频数: {videos_now}")
-        
-        # 检查是否有新内容加载
-        if videos_now > videos_before:
-            videos_before = videos_now
-            no_new_content_count = 0
-            print(f"加载了新视频，继续滚动...")
-        else:
-            no_new_content_count += 1
-            print(f"没有加载新视频 ({no_new_content_count}次)")
-            
-            # 如果连续3次没有新内容，尝试点击"加载更多"按钮
-            if no_new_content_count == 3:
-                try:
-                    load_more_button = driver.find_element(By.CSS_SELECTOR, 
-                                                         '.load-more, .more-btn, [class*="more"]')
-                    print("找到'加载更多'按钮，点击中...")
-                    driver.execute_script("arguments[0].click();", load_more_button)
-                    time.sleep(3)
-                    no_new_content_count = 0  # 重置计数器
-                except:
-                    print("未找到'加载更多'按钮")
-            
-            # 如果连续5次没有新内容，可能已到底部
-            if no_new_content_count >= 5:
-                print("连续5次未加载新内容，可能已到达页面底部")
-                break
-        
-        # 如果页面高度没变，可能已经加载完所有内容
+        # 如果高度没有变化，可能已经到底或没有更多内容
         if new_height == last_height:
-            # 执行一些额外的滚动尝试
-            for i in range(3):
-                # 尝试一些小幅度的上下滚动，以触发可能的懒加载
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight - 500);")
-                time.sleep(1)
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(2)
-                
-                # 再次检查高度
-                new_height = driver.execute_script("return document.body.scrollHeight")
-                if new_height > last_height:
-                    print("通过额外滚动触发了新内容加载")
-                    break
-                    
-            if new_height == last_height:
-                print(f"页面高度未变化，可能已加载所有内容")
+            scroll_attempts += 1
+            if scroll_attempts >= 2:  # 连续两次高度不变，认为已加载完成
                 break
-                
+        else:
+            scroll_attempts = 0  # 重置计数器
+            
         last_height = new_height
+        print(f"页面滚动中... 当前高度: {new_height}px")
     
-    # 最终统计
-    total_videos = len(driver.find_elements(By.CSS_SELECTOR, 
-                                          '.bili-video-card, .small-item, .video-page-card, [data-v-code]'))
-    print(f"滚动完成，共找到 {total_videos} 个视频元素")
-    
-    return total_videos
+    # 滚动回页面顶部
+    driver.execute_script("window.scrollTo(0, 0);")
+    print("页面滚动完成")
 
 
-def get_bilibili_videos(up_id):
+def verify_page_number(driver, expected_page):
+    """验证当前加载的是否为预期页面"""
+    try:
+        # 首先检查URL中的页码
+        current_url = driver.current_url
+        url_page_match = re.search(r'[?&]pn=(\d+)', current_url)
+        if url_page_match:
+            url_page = int(url_page_match.group(1))
+            if url_page == expected_page:
+                print(f"URL确认当前是第{expected_page}页")
+                return True
+        
+        # 检查活动的分页按钮
+        active_selectors = [
+            ".paginationjs-page.active",
+            ".page-item.active",
+            ".be-pager-item.be-pager-item-active",
+            ".n-pager__item.active",
+            "[class*='pagination'] [class*='active']"
+        ]
+        
+        for selector in active_selectors:
+            try:
+                active_page = driver.find_element(By.CSS_SELECTOR, selector)
+                page_text = active_page.text.strip()
+                if page_text.isdigit() and int(page_text) == expected_page:
+                    print(f"分页按钮确认当前是第{expected_page}页")
+                    return True
+            except:
+                continue
+        
+        print(f"无法确认当前是否为第{expected_page}页")
+        return False
+    except Exception as e:
+        print(f"验证页码时出错: {e}")
+        return False
+
+
+def navigate_to_page_by_url(driver, page_num, up_id):
+    """通过直接修改URL导航到指定页面"""
+    try:
+        current_url = driver.current_url
+        # 避免不必要的刷新：如果已经在正确的页面上，不执行跳转
+        url_page_match = re.search(r'[?&]pn=(\d+)', current_url)
+        if url_page_match and int(url_page_match.group(1)) == page_num:
+            print(f"已经在第{page_num}页，无需跳转")
+            return True
+            
+        # 使用多种可能的URL格式
+        urls = [
+            f"https://space.bilibili.com/{up_id}/video?pn={page_num}",
+            f"https://space.bilibili.com/{up_id}/video?tid=0&pn={page_num}&keyword=&order=pubdate",
+            f"https://space.bilibili.com/{up_id}/video?page={page_num}"
+        ]
+        
+        for url in urls:
+            try:
+                print(f"尝试通过URL导航到第{page_num}页: {url}")
+                driver.get(url)
+                time.sleep(3)
+                
+                # 验证是否加载了正确的页面
+                if verify_page_number(driver, page_num):
+                    print(f"成功通过URL导航到第{page_num}页")
+                    return True
+            except:
+                continue
+        
+        print(f"所有URL导航方式均失败")
+        return False
+    except Exception as e:
+        print(f"URL导航到第{page_num}页失败: {e}")
+        return False
+
+
+def navigate_to_page_by_button(driver, page_num):
+    """尝试通过点击分页按钮导航到指定页面"""
+    try:
+        # 首先滚动到页面底部，确保分页控件可见
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(1)
+        
+        # 尝试多种可能的分页按钮选择器
+        pagination_selectors = [
+            ".paginationjs-pages ul li",
+            ".pagination .page-item",
+            ".be-pager-item",
+            ".n-pager__item",
+            ".pages li",
+            ".page-wrap .page-item",
+            "[class*='pagination'] [class*='item']"
+        ]
+        
+        for selector in pagination_selectors:
+            try:
+                page_btns = driver.find_elements(By.CSS_SELECTOR, selector)
+                
+                if not page_btns:
+                    continue
+                    
+                print(f"找到{len(page_btns)}个分页按钮")
+                
+                # 截图查看分页区域
+                try:
+                    element = driver.find_element(By.CSS_SELECTOR, ".page-wrap, .pagination, .be-pager")
+                    screenshot_path = f"pagination_screenshot_page{page_num}.png"
+                    element.screenshot(screenshot_path)
+                    print(f"已保存分页区域截图到 {screenshot_path}")
+                except:
+                    pass
+                
+                # 检查每个按钮
+                for btn in page_btns:
+                    try:
+                        btn_text = btn.text.strip()
+                        print(f"发现分页按钮: '{btn_text}'")
+                        
+                        # 检查是否是目标页码
+                        if btn_text == str(page_num):
+                            print(f"找到第{page_num}页按钮，尝试点击...")
+                            
+                            # 确保元素可见和可点击
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+                            time.sleep(1)
+                            
+                            try:
+                                # 尝试直接点击
+                                btn.click()
+                                time.sleep(2)
+                            except:
+                                # 如果直接点击失败，尝试JS点击
+                                driver.execute_script("arguments[0].click();", btn)
+                                time.sleep(2)
+                            
+                            # 验证是否成功导航
+                            if verify_page_number(driver, page_num):
+                                print(f"成功通过按钮导航到第{page_num}页")
+                                return True
+                    except Exception as e:
+                        print(f"点击按钮时出错: {e}")
+                        continue
+            except Exception as e:
+                print(f"使用选择器'{selector}'查找按钮时出错: {e}")
+                continue
+        
+        # 尝试通过"下一页"按钮导航
+        if page_num > 1:  # 对于除第1页外的所有页面
+            next_page_selectors = [
+                ".paginationjs-next",
+                ".pagination .next",
+                ".be-pager-next",
+                ".n-pager__next",
+                ".page-wrap .next", 
+                "[class*='pagination'] [class*='next']",
+                "a:contains('下一页')"
+            ]
+            
+            for selector in next_page_selectors:
+                try:
+                    next_btns = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if next_btns:
+                        next_btn = next_btns[0]
+                        current_page = 1
+                        
+                        # 获取当前页面
+                        try:
+                            active_page = driver.find_element(By.CSS_SELECTOR, ".active, .be-pager-item-active")
+                            if active_page.text.isdigit():
+                                current_page = int(active_page.text)
+                        except:
+                            pass
+                            
+                        print(f"当前在第{current_page}页，需要点击'下一页'按钮 {page_num - current_page} 次")
+                        
+                        # 点击适当次数的"下一页"
+                        for i in range(page_num - current_page):
+                            print(f"点击'下一页'按钮 ({i+1}/{page_num - current_page})...")
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_btn)
+                            time.sleep(1)
+                            
+                            try:
+                                next_btn.click()
+                            except:
+                                driver.execute_script("arguments[0].click();", next_btn)
+                            
+                            time.sleep(3)
+                            
+                            # 验证是否到达目标页
+                            if verify_page_number(driver, current_page + i + 1):
+                                if current_page + i + 1 == page_num:
+                                    print(f"成功通过'下一页'按钮导航到第{page_num}页")
+                                    return True
+                            else:
+                                print("导航失败，未到达预期页面")
+                                break
+                                
+                            # 重新获取"下一页"按钮
+                            try:
+                                next_btns = driver.find_elements(By.CSS_SELECTOR, selector)
+                                if next_btns:
+                                    next_btn = next_btns[0]
+                                else:
+                                    print("未找到'下一页'按钮，可能已到达最后一页")
+                                    break
+                            except:
+                                print("无法获取'下一页'按钮")
+                                break
+                except:
+                    continue
+        
+        print("所有按钮导航方式均失败")
+        return False
+    except Exception as e:
+        print(f"按钮导航到第{page_num}页失败: {e}")
+        return False
+
+
+def get_bilibili_videos(up_id, use_cookies=True, cookies_path=r"C:\Users\DELL\Desktop\bilibili.txt"):
     """提取B站UP主所有视频链接"""
     # 配置浏览器选项
     options = Options()
-    
-    # 增强反自动化检测规避
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument('--disable-extensions')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    
-    # 设置UA
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36')
-    
-    # 语言设置
-    options.add_argument('--lang=zh-CN')
-    
-    # 禁用各种自动化检测标志
-    options.add_experimental_option('excludeSwitches', ['enable-automation', 'enable-logging'])
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
     options.add_experimental_option('useAutomationExtension', False)
+    # options.add_argument('--headless=new')  # 注释掉无头模式，使浏览器可见
+    options.add_argument('--disable-gpu')
     
-    # 移除无头模式，改为有头模式
-    # options.add_argument('--headless=new')
+    # 添加更多反检测措施
+    options.add_argument('--disable-infobars')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--no-sandbox')
     
+    # 添加自定义User-Agent
+    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+
     # 设置浏览器
     service = Service(r"D:\chrom driver\chrom driver\chromedriver.exe")
     driver = webdriver.Chrome(service=service, options=options)
-    
-    # 设置浏览器窗口大小
-    driver.set_window_size(1920, 1080)
-    
+
     # 修改window.navigator.webdriver为false以绕过检测
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": """
@@ -430,738 +486,406 @@ def get_bilibili_videos(up_id):
             get: () => false
         });
         
-        // 覆盖检测webdriver的方法
-        if (window.navigator.plugins) {
-            Object.setPrototypeOf(navigator, Object.prototype);
-        }
-        
-        // 伪造完整的navigator属性
-        const orgProto = navigator.__proto__;
-        delete navigator.__proto__;
-        
-        // 伪造一些独特的指纹特征
-        navigator.platform = 'Win32';
-        navigator.language = 'zh-CN';
+        // 覆盖WebDriver属性
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
         """
     })
-    
-    # 伪造更多的浏览器特征
-    driver.execute_cdp_cmd("Network.setUserAgentOverride", {
-        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-        "platform": "Windows",
-        "acceptLanguage": "zh-CN,zh;q=0.9"
-    })
-    
-    # 创建截图目录
-    if not os.path.exists("debug_screenshots"):
-        os.makedirs("debug_screenshots")
-    
-    # 从文件加载cookies
-    cookie_file = r"C:\Users\DELL\Desktop\bilibili.txt"
-    cookie_loaded = load_cookies(driver, cookie_file)
-    
+
+    # 设置窗口大小
+    driver.set_window_size(1920, 1080)
+
     videos = []
 
     try:
-        # 再次检查登录状态
-        if not cookie_loaded:
-            print("警告: Cookie未成功加载，可能影响视频获取")
-            
-        # 确保已登录到B站主页
-        print("再次访问B站主页并检查登录状态...")
-        driver.get("https://www.bilibili.com")
-        time.sleep(5)
+        # 首先访问B站首页以设置Cookies
+        print("先访问B站首页...")
+        driver.get("https://www.bilibili.com/")
+        time.sleep(3)
         
-        # 尝试关闭登录弹窗 (如果出现)
-        close_login_popup(driver)
+        login_success = False
+        
+        # 尝试加载Cookies
+        if use_cookies and os.path.exists(cookies_path):
+            print(f"尝试使用保存的Cookies: {cookies_path}")
+            load_cookies(driver, cookies_path)
             
+            # 刷新页面使Cookies生效
+            driver.refresh()
+            time.sleep(3)
+            
+            # 检查是否登录成功
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".header-avatar, .avatar"))
+                )
+                login_success = True
+                print("Cookies登录成功!")
+            except:
+                print("Cookies无效或已过期")
+                login_success = False
+        
+        # 如果Cookies无效或不存在，则进行手动登录
+        if not login_success:
+            print("需要手动登录...")
+            if manual_login(driver):
+                # 保存新的Cookies供下次使用
+                save_cookies(driver, cookies_path)
+                login_success = True
+        
+        # 即使没有登录成功，也尝试访问UP主页面(有些UP主不需要登录也能查看)
+        
         # 直接访问视频列表页
         url = f"https://space.bilibili.com/{up_id}/video"
-        print(f"正在访问UP主页面: {url}")
+        print(f"正在访问: {url}")
         driver.get(url)
 
         # 等待页面加载
-        time.sleep(5)
-        
-        # 再次尝试关闭登录弹窗
-        close_login_popup(driver)
-        
-        # 保存页面截图
-        save_debug_screenshot(driver, f"up_page_{up_id}.png")
-        
-        # 使用滚动加载更多视频
-        scroll_page(driver)
+        wait_for_page_load(driver)
 
-        # 获取当前页面上的所有视频
+        # 检查是否有登录弹窗，如果有则需要手动登录
+        if check_login_popup(driver):
+            print("检测到登录弹窗，需要手动登录...")
+            if manual_login(driver):
+                # 保存新的Cookies供下次使用
+                save_cookies(driver, cookies_path)
+                # 重新访问页面
+                driver.get(url)
+                wait_for_page_load(driver)
+
+        # 获取视频总数和总页数
+        total_videos = get_video_count(driver)
+        total_pages = get_total_pages(driver)
+        
+        print(f"检测到视频总数约: {total_videos}")
+                    print(f"检测到总页数: {total_pages}")
+        
+        # 如果无法检测到页数，尝试使用视频数估算
+        if total_pages <= 1 and total_videos > 30:
+            estimated_pages = (total_videos + 29) // 30  # 每页约30个视频
+            total_pages = max(estimated_pages, 1)
+            print(f"根据视频数量估算页数: {total_pages}")
+
+        # 处理当前页面视频
         current_page_videos = scrape_current_page(driver)
         videos.extend(current_page_videos)
         print(f"第1页找到 {len(current_page_videos)} 个视频")
 
-        # 保存翻页前截图
-        save_debug_screenshot(driver, "before_pagination.png")
+        # 循环处理后续页面
+        page = 2
+        consecutive_failures = 0
+        max_failures = 5  # 增加失败次数阈值
         
-        # 尝试获取页码信息 - 增强翻页检测
-        total_pages = get_total_pages(driver)
-        
-        # 如果检测到多页，尝试翻页
-        if total_pages > 1:
-            print(f"检测到总共有 {total_pages} 页，开始翻页处理...")
-            current_page = 1
+        while page <= total_pages and consecutive_failures < max_failures:
+            print(f"\n===== 开始处理第 {page} 页 =====")
             
-            # 循环处理所有页面，采用点击翻页方式
-            while current_page < total_pages:
-                next_page = current_page + 1
-                print(f"\n{'='*30} 尝试翻到第 {next_page} 页 {'='*30}")
+            # 优先尝试点击按钮导航 - 这样更自然，不会刷新整个页面
+            success = navigate_to_page_by_button(driver, page)
+            
+            # 如果按钮导航失败，尝试URL导航
+            if not success:
+                success = navigate_to_page_by_url(driver, page, up_id)
+            
+            # 等待页面加载并滚动
+            wait_for_page_load(driver)
+            
+            # 检查是否成功加载了正确的页面
+            is_correct_page = verify_page_number(driver, page)
+            
+            if not success or not is_correct_page:
+                consecutive_failures += 1
+                print(f"导航到第{page}页失败 (失败次数: {consecutive_failures}/{max_failures})")
                 
-                # 点击翻页 - 优先使用点击方式
-                if navigate_to_page(driver, next_page, up_id):
-                    current_page = next_page
-                    print(f"成功导航到第 {current_page} 页")
-                    
-                    # 保存每个页面的截图
-                    save_debug_screenshot(driver, f"page_{current_page}.png")
-                    
-                    # 再次尝试关闭登录弹窗
-                    close_login_popup(driver)
-                    
-                    # 在新页面上滚动加载更多视频
-                    scroll_page(driver)
-                    
-                    # 抓取当前页面视频
-                    page_videos = scrape_current_page(driver)
-                    
-                    # 添加新找到的视频
-                    new_count = 0
-                    existing_bvids = set(v['bvid'] for v in videos)
-                    
-                    for video in page_videos:
-                        if video['bvid'] not in existing_bvids:
-                            videos.append(video)
-                            new_count += 1
-                            
-                    print(f"第{current_page}页找到 {new_count} 个新视频")
+                if consecutive_failures < max_failures:
+                    print("尝试重新加载页面...")
+                    time.sleep(random.uniform(2, 5))
+                    continue
                 else:
-                    print(f"导航到第 {next_page} 页失败，尝试下一页或结束")
-                    # 导航失败可能是已到达最后一页，或者页面结构不支持正常翻页
-                    # 尝试直接跳转到下一页
-                    try:
-                        direct_url = f"https://space.bilibili.com/{up_id}/video?page={next_page}"
-                        print(f"尝试直接访问URL: {direct_url}")
-                        driver.get(direct_url)
-                        time.sleep(5)
-                        current_page = next_page
-                        
-                        # 检查是否真的加载了新页面
-                        if len(scrape_current_page(driver)) > 0:
-                            continue  # 成功加载，继续处理下一页
-                    except:
-                        pass
-                        
-                    # 如果直接访问也失败，可能是真的没有更多页了
-                    print(f"无法继续翻页，结束于第 {current_page} 页")
+                    print(f"连续{max_failures}次失败，停止翻页")
+                break
+            else:
+                consecutive_failures = 0  # 重置失败计数
+
+            # 提取当前页面视频
+            page_videos = scrape_current_page(driver)
+
+            # 添加新找到的视频
+            new_count = 0
+            existing_bvids = set(v['bvid'] for v in videos)
+
+            for video in page_videos:
+                if video['bvid'] not in existing_bvids:
+                    videos.append(video)
+                    new_count += 1
+
+            print(f"第{page}页找到 {new_count} 个新视频")
+
+            # 视频数量没有增加，可能是页面没有正确加载或者已到达末页
+            if new_count == 0:
+                # 尝试再次通过URL加载页面，使用不同的查询参数
+                retry_url = f"https://space.bilibili.com/{up_id}/video?tid=0&pn={page}&keyword=&order=pubdate"
+                print(f"未找到新视频，尝试使用不同参数: {retry_url}")
+                driver.get(retry_url)
+                wait_for_page_load(driver)
+
+                # 再次尝试获取视频
+                retry_videos = scrape_current_page(driver)
+                retry_count = 0
+
+                for video in retry_videos:
+                    if video['bvid'] not in existing_bvids:
+                        videos.append(video)
+                        retry_count += 1
+
+                print(f"重试后，第{page}页找到 {retry_count} 个新视频")
+
+                # 如果仍然没有新视频
+                if retry_count == 0:
+                    consecutive_failures += 1
+                    if consecutive_failures >= max_failures:
+                        print(f"多次尝试无法获取新视频，可能已到达末页，停止翻页")
                     break
-                
-                # 随机延迟，避免请求过快
-                delay = random.uniform(2, 5)
-                print(f"翻页延迟 {delay:.1f} 秒...")
-                time.sleep(delay)
-        else:
-            print("未检测到翻页，只处理当前页面")
-        
-        print(f"\n{'='*30} 抓取完成 {'='*30}")
-        print(f"共找到 {len(videos)} 个视频")
-        
+                else:
+                    consecutive_failures = 0  # 重置失败计数
+            
+            # 准备处理下一页
+            page += 1
+
+            # 随机延迟，避免请求过快
+            time.sleep(random.uniform(3, 7))
+
+        print(f"所有页面处理完成，总共找到 {len(videos)} 个视频")
+
+        # 视频数量与预期差距较大时，尝试使用API方法
+        expected_min = max(5, total_videos // 2)  # 至少应该找到一半的视频
+        if len(videos) < expected_min:
+            print(f"视频数量({len(videos)})远低于预期({total_videos})，尝试使用API方法提取...")
+            backup_videos = get_videos_using_api(driver, up_id)
+
+            # 添加备用方法找到的视频
+            existing_bvids = set(v['bvid'] for v in videos)
+            new_count = 0
+            for video in backup_videos:
+                if video['bvid'] not in existing_bvids:
+                    videos.append(video)
+                    new_count += 1
+
+            print(f"API方法新增 {new_count} 个视频，总计 {len(videos)} 个视频")
+
         return videos
-        
+
     except Exception as e:
         print(f"视频提取过程中出错: {e}")
         traceback.print_exc()
-        # 发生错误时保存截图
-        save_debug_screenshot(driver, "error.png")
         return videos
     finally:
-        print("浏览器会话结束，即将关闭浏览器...")
         driver.quit()
 
 
+def check_login_popup(driver):
+    """检查页面上是否有登录弹窗"""
+    try:
+        # 尝试查找常见的登录弹窗元素
+        login_elements = driver.find_elements(By.CSS_SELECTOR, 
+            ".bili-mini-login-panel, .login-panel, .unlogin-popover, .login-tip, .need-login")
+        
+        if login_elements:
+            print("检测到登录弹窗")
+            return True
+            
+        # 检查是否有包含"登录"字样的弹窗
+        login_text_elements = driver.find_elements(By.XPATH, 
+            "//*[contains(text(), '登录') or contains(text(), '登陆')]")
+            
+        for elem in login_text_elements:
+            # 检查元素是否可见且像是弹窗的一部分
+            if elem.is_displayed() and elem.tag_name in ['div', 'p', 'h2', 'h3', 'span', 'button']:
+                parent = driver.execute_script(
+                    "return arguments[0].parentNode.parentNode.parentNode", elem)
+                if 'popup' in parent.get_attribute('class') or 'modal' in parent.get_attribute('class'):
+                    print("检测到登录文本弹窗")
+                    return True
+        
+        return False
+    except Exception as e:
+        print(f"检查登录弹窗时出错: {e}")
+        return False
+
+
+def wait_for_page_load(driver, timeout=10):
+    """等待页面加载完成并执行滚动以加载延迟内容"""
+    try:
+        # 等待页面加载指示器消失或关键元素出现
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".video-list, .cube-list, .bili-video-card"))
+        )
+        
+        # 执行页面滚动，确保懒加载内容显示
+        scroll_page(driver)
+        
+    except TimeoutException:
+        print("页面加载超时")
+    except Exception as e:
+        print(f"等待页面加载时出错: {e}")
+
+
 def scrape_current_page(driver):
-    """从当前页面获取所有视频信息，使用选择器方法"""
-    videos = []
-    print("使用CSS选择器提取当前页面视频...")
-    
-    # B站视频卡片的常见选择器集合
-    video_card_selectors = [
-        '.bili-video-card',  # 最新版本的视频卡片
-        '.small-item',       # 旧版的视频卡片
-        '.video-page-card',  # 页面视频卡片
-        '.video-item',       # 视频列表项
-        '.audio-card',       # 音频卡片(也可能包含视频)
-        '.card-list .card',  # 卡片列表中的卡片
-        '.section-item',     # 分区项目
-        '.info-box',         # 带信息的盒子
-        '[class*="video"][class*="card"]', # 包含video和card的类
-        '[class*="videocard"]'  # 包含videocard的类
-    ]
-    
-    # 合并所有选择器为一个大查询
-    combined_selector = ', '.join(video_card_selectors)
-    
-    # 获取所有匹配的视频卡片元素
-    try:
-        video_items = driver.find_elements(By.CSS_SELECTOR, combined_selector)
-        print(f"找到 {len(video_items)} 个潜在的视频卡片元素")
-        
-        if not video_items:
-            print("未找到视频卡片，尝试使用更通用的选择器...")
-            # 退回到更通用的选择器
-            video_items = driver.find_elements(By.CSS_SELECTOR, "a[href*='/video/']")
-            print(f"使用通用选择器找到 {len(video_items)} 个视频链接")
-        
-        # 处理找到的每个视频卡片
-        for item in video_items:
-            try:
-                # 尝试不同的方式获取视频链接和信息
-                video_info = extract_video_info_from_element(driver, item)
-                if video_info and video_info['bvid'] and not any(v['bvid'] == video_info['bvid'] for v in videos):
-                    videos.append(video_info)
-                    print(f"提取到视频: {video_info['bvid']} - {video_info['title']}")
-            except Exception as e:
-                print(f"提取单个视频信息时出错: {e}")
-                continue
-    except Exception as e:
-        print(f"使用选择器查找视频卡片时出错: {e}")
-    
-    # 如果使用选择器方法未找到视频，尝试直接从页面源码查找所有视频链接
-    if not videos:
-        print("选择器方法未找到视频，尝试从页面源码提取...")
-        videos = extract_videos_from_page_source(driver)
-    
-    print(f"当前页面共提取到 {len(videos)} 个视频")
-    return videos
-
-
-def extract_video_info_from_element(driver, element):
-    """从元素中提取视频信息"""
-    try:
-        # 默认视频信息
-        video_info = {
-            'bvid': '',
-            'title': '未知标题',
-            'link': ''
-        }
-        
-        # 方法1: 如果元素本身是链接并包含视频地址
-        href = element.get_attribute('href') or ''
-        if '/video/' in href:
-            link = href
-            bvid_match = re.search(r'BV\w{10}', href)
-            if bvid_match:
-                video_info['bvid'] = bvid_match.group(0)
-                video_info['link'] = f"https://www.bilibili.com/video/{video_info['bvid']}"
-                
-                # 尝试获取标题从元素的title属性或文本内容
-                title = element.get_attribute('title') or element.text.strip()
-                if title:
-                    video_info['title'] = title
-                    
-                return video_info
-        
-        # 方法2: 查找元素内部的链接
-        link_selectors = [
-            "a[href*='/video/']",
-            ".title a", 
-            ".info a", 
-            ".name a",
-            "a.title", 
-            "[title] a"
-        ]
-        
-        for selector in link_selectors:
-            try:
-                link_elem = element.find_element(By.CSS_SELECTOR, selector)
-                href = link_elem.get_attribute('href')
-                if href and '/video/' in href:
-                    bvid_match = re.search(r'BV\w{10}', href)
-                    if bvid_match:
-                        video_info['bvid'] = bvid_match.group(0)
-                        video_info['link'] = f"https://www.bilibili.com/video/{video_info['bvid']}"
-                        
-                        # 尝试获取标题
-                        title_selectors = [".title", ".info-title", ".video-title", "[title]"]
-                        for ts in title_selectors:
-                            try:
-                                title_elem = element.find_element(By.CSS_SELECTOR, ts)
-                                title = title_elem.get_attribute('title') or title_elem.text.strip()
-                                if title:
-                                    video_info['title'] = title
-                                    break
-                            except:
-                                pass
-                                
-                        # 如果还没有标题，尝试从链接元素获取
-                        if video_info['title'] == '未知标题':
-                            title = link_elem.get_attribute('title') or link_elem.text.strip()
-                            if title:
-                                video_info['title'] = title
-                                
-                        return video_info
-            except:
-                continue
-        
-        # 如果上述方法都失败，尝试JavaScript提取
-        try:
-            # 使用JavaScript查找视频链接
-            links = driver.execute_script("""
-                var element = arguments[0];
-                var links = element.querySelectorAll('a[href*="/video/"]');
-                var results = [];
-                for(var i=0; i<links.length; i++) {
-                    results.push({
-                        href: links[i].href,
-                        text: links[i].textContent.trim(),
-                        title: links[i].getAttribute('title') || ''
-                    });
-                }
-                return results;
-            """, element)
-            
-            for link in links:
-                href = link.get('href', '')
-                if href and '/video/' in href:
-                    bvid_match = re.search(r'BV\w{10}', href)
-                    if bvid_match:
-                        video_info['bvid'] = bvid_match.group(0)
-                        video_info['link'] = f"https://www.bilibili.com/video/{video_info['bvid']}"
-                        
-                        # 获取标题
-                        text = link.get('text', '').strip()
-                        title = link.get('title', '').strip()
-                        video_info['title'] = title or text or '未知标题'
-                        
-                        return video_info
-        except:
-            pass
-        
-        # 如果有BV号但没有完整链接
-        if video_info['bvid'] and not video_info['link']:
-            video_info['link'] = f"https://www.bilibili.com/video/{video_info['bvid']}"
-            
-        return video_info if video_info['bvid'] else None
-            
-    except Exception as e:
-        print(f"提取视频元素信息时出错: {e}")
-        return None
-
-
-def extract_videos_from_page_source(driver):
-    """从页面源码中提取视频信息（作为选择器方法的备选）"""
+    """从当前页面获取所有视频信息"""
     videos = []
     page_source = driver.page_source
-    
-    # 从源码中提取所有BV号
-    bv_pattern = r'BV\w{10}'
-    bvids = re.findall(bv_pattern, page_source)
-    
-    # 提取视频标题
-    title_pattern = r'title="([^"]+)"[^>]*href="[^"]*?/video/(BV\w{10})'
-    title_matches = re.findall(title_pattern, page_source)
-    
-    # 创建bvid到标题的映射
-    title_map = {}
-    for title, bvid in title_matches:
-        title_map[bvid] = title
-    
-    # 添加找到的所有BV视频
-    for bvid in set(bvids):
-        videos.append({
-            'bvid': bvid,
-            'title': title_map.get(bvid, '未知标题'),
-            'link': f"https://www.bilibili.com/video/{bvid}"
-        })
-    
+
+    # 首先使用更精确的方式提取视频卡片
+    try:
+        # 2024年B站最新版视频卡片最常见的选择器
+        print("尝试使用选择器提取视频卡片...")
+        video_items = driver.find_elements(By.CSS_SELECTOR,
+                                           '.bili-video-card, .small-item, .video-page-card, [data-v-code]')
+
+        if video_items:
+            print(f"找到 {len(video_items)} 个视频卡片元素")
+
+            for item in video_items:
+                try:
+                    # 尝试在卡片内找到链接
+                    link_elem = None
+                    try:
+                        link_elem = item.find_element(By.CSS_SELECTOR, "a[href*='/video/']")
+                    except:
+                        # 如果自身就是链接元素
+                        if item.tag_name == 'a' and '/video/' in (item.get_attribute('href') or ''):
+                            link_elem = item
+
+                    if link_elem:
+                        href = link_elem.get_attribute('href')
+                        # 提取BV号
+                        bvid_match = re.search(r'BV\w{10}', href)
+
+                        if bvid_match:
+                            bvid = bvid_match.group(0)
+
+                            # 尝试获取标题
+                            title = ''
+                            try:
+                                title_elem = item.find_element(By.CSS_SELECTOR,
+                                                               '.bili-video-card__info--tit, .title, h3')
+                                title = title_elem.text.strip() or title_elem.get_attribute('title')
+                            except:
+                                pass
+
+                            # 添加视频信息
+                            videos.append({
+                                'bvid': bvid,
+                                'title': title or '未知标题',
+                                'link': f"https://www.bilibili.com/video/{bvid}"
+                            })
+                            print(f"找到视频: {bvid} - {title}")
+                except Exception as e:
+                    # 单个元素处理错误不影响整体
+                    pass
+    except Exception as e:
+        print(f"选择器提取视频卡片时出错: {e}")
+
+    # 备用方法：从页面源码直接提取所有BV号
+    if not videos:
+        print("使用正则表达式从页面源码提取BV号...")
+        bv_pattern = r'BV\w{10}'
+        bvids = re.findall(bv_pattern, page_source)
+
+        for bvid in set(bvids):
+            # 检查此BV号是否已经添加
+            if not any(v['bvid'] == bvid for v in videos):
+                videos.append({
+                    'bvid': bvid,
+                    'title': '标题未知',
+                    'link': f"https://www.bilibili.com/video/{bvid}"
+                })
+                print(f"从源码中提取到视频: {bvid}")
+
+    # 第三种方法：尝试从页面中的JSON数据提取
+    if len(videos) < 2:
+        print("尝试从页面JSON数据提取视频...")
+        try:
+            # 尝试提取__INITIAL_STATE__
+            state_pattern = r'window\.__INITIAL_STATE__=({.*?});'
+            state_match = re.search(state_pattern, page_source)
+
+            if state_match:
+                state_json = state_match.group(1)
+                try:
+                    state_data = json.loads(state_json)
+
+                    # 尝试不同的数据路径
+                    if 'videoList' in state_data and 'vlist' in state_data['videoList']:
+                        vlist = state_data['videoList']['vlist']
+                        for video in vlist:
+                            bvid = video.get('bvid')
+                            if bvid and not any(v['bvid'] == bvid for v in videos):
+                                videos.append({
+                                    'bvid': bvid,
+                                    'title': video.get('title', '未知标题'),
+                                    'link': f"https://www.bilibili.com/video/{bvid}"
+                                })
+                                print(f"从INITIAL_STATE中提取到视频: {bvid}")
+                except:
+                    print("解析INITIAL_STATE JSON失败")
+        except Exception as e:
+            print(f"从JSON数据提取视频时出错: {e}")
+
     return videos
 
 
-def get_total_pages(driver):
-    """获取总页数"""
-    print("检测页面数量...")
-    try:
-        # 保存页面源码以便于调试
-        page_source = driver.page_source
-        with open("page_source.html", "w", encoding="utf-8") as f:
-            f.write(page_source)
-        print("已保存页面源码以便调试")
-        
-        # 尝试获取所有页码元素，确定总页数
-        total_pages = 1
-        
-        # 尝试更多可能的分页选择器
-        pagination_selectors = [
-            ".paginationjs-pages .paginationjs-page", 
-            ".pagination .page-item", 
-            ".be-pager-item", 
-            ".pages .page-item",
-            ".page-wrap .page-item",
-            ".page-box .page",
-            ".page-wrap",
-            ".pager",
-            "[class*='pagination']",
-            "[class*='pager']",
-            "[class*='page']"
-        ]
-        
-        # 先查找页面元素
-        for selector in pagination_selectors:
-            try:
-                print(f"尝试页码选择器: {selector}")
-                page_items = driver.find_elements(By.CSS_SELECTOR, selector)
-                
-                if page_items:
-                    print(f"通过选择器 '{selector}' 找到 {len(page_items)} 个页码元素")
-                    
-                    numbers = []
-                    for item in page_items:
-                        try:
-                            text = item.text.strip()
-                            print(f"  页码文本: '{text}'")
-                            # 处理可能有的"尾页"或其他非数字页码
-                            if text.isdigit():
-                                numbers.append(int(text))
-                        except:
-                            pass
-                    
-                    if numbers:
-                        total_pages = max(numbers)
-                        print(f"检测到总页数: {total_pages}")
-                        # 保存分页元素截图
-                        try:
-                            if page_items[0].is_displayed():
-                                driver.execute_script("arguments[0].scrollIntoView();", page_items[0])
-                                save_debug_screenshot(driver, "pagination_element.png")
-                        except:
-                            pass
-                        return total_pages
-            except Exception as e:
-                print(f"使用选择器 '{selector}' 时出错: {e}")
-        
-        # 尝试从URL参数中获取信息
-        try:
-            current_url = driver.current_url
-            print(f"当前URL: {current_url}")
-            
-            # 尝试执行JavaScript获取总页数
-            js_page_count = driver.execute_script("""
-                // 尝试从各种可能的页面数据中获取总页数
-                if (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.videoList) {
-                    const state = window.__INITIAL_STATE__;
-                    if (state.videoList.page && state.videoList.pagesize && state.videoList.count) {
-                        return Math.ceil(state.videoList.count / state.videoList.pagesize) || 1;
-                    }
-                }
-                
-                // 尝试从页面上获取带页码的链接
-                const pageLinks = document.querySelectorAll('a[href*="?page="], a[href*="&page="]');
-                let maxPage = 1;
-                
-                for (let i = 0; i < pageLinks.length; i++) {
-                    const href = pageLinks[i].getAttribute('href');
-                    const match = href.match(/[?&]page=(\d+)/);
-                    if (match && match[1]) {
-                        const pageNum = parseInt(match[1], 10);
-                        if (pageNum > maxPage) {
-                            maxPage = pageNum;
-                        }
-                    }
-                }
-                
-                return maxPage;
-            """)
-            
-            if js_page_count and isinstance(js_page_count, (int, float)) and js_page_count > 1:
-                print(f"通过JavaScript检测到总页数: {js_page_count}")
-                return int(js_page_count)
-                
-        except Exception as e:
-            print(f"通过JavaScript获取页数时出错: {e}")
-        
-        print("未通过常规方法找到页码，尝试通过正则表达式从页面源码分析")
-        
-        # 尝试从页面源代码中查找页数信息
-        try:
-            # 查找常见的页数模式
-            page_patterns = [
-                r'\"page\":(\d+),\"pagesize\":(\d+),\"count\":(\d+)',  # INITIAL_STATE格式
-                r'data-page="(\d+)"',  # 页码标记
-                r'共(\d+)页',  # 中文表述
-                r'totalPage\":(\d+)',  # JSON格式
-                r'page=(\d+)',  # URL参数
-            ]
-            
-            for pattern in page_patterns:
-                matches = re.findall(pattern, page_source)
-                if matches:
-                    print(f"通过模式 '{pattern}' 找到匹配: {matches}")
-                    
-                    if pattern == r'\"page\":(\d+),\"pagesize\":(\d+),\"count\":(\d+)' and len(matches[0]) == 3:
-                        # 特殊处理API响应格式
-                        page, pagesize, count = map(int, matches[0])
-                        total_pages = (count + pagesize - 1) // pagesize
-                        print(f"根据API参数计算得出总页数: {total_pages}")
-                        return total_pages
-                    else:
-                        # 找出最大页码
-                        nums = []
-                        for m in matches:
-                            if isinstance(m, tuple):
-                                nums.extend([int(x) for x in m if x.isdigit()])
-                            elif isinstance(m, str) and m.isdigit():
-                                nums.append(int(m))
-                        
-                        if nums:
-                            max_page = max(nums)
-                            if max_page > 1:
-                                print(f"找到可能的最大页码: {max_page}")
-                                return max_page
-        except Exception as e:
-            print(f"通过正则表达式分析页数时出错: {e}")
-            
-        # 如果以上方法都失败，返回默认值
-        print(f"所有检测方法都未找到明确的页码，使用默认值: {total_pages}页")
-        return total_pages
-    except Exception as e:
-        print(f"获取页码时出错: {e}")
-        traceback.print_exc()
-        return 1
+def get_videos_using_api(driver, up_id):
+    """使用B站API获取视频列表"""
+    videos = []
 
-
-def navigate_to_page(driver, page_num, up_id):
-    """通过点击翻页按钮导航到指定页码"""
-    print(f"尝试点击翻页按钮导航到第{page_num}页...")
-    
-    # 尝试查找并点击页码按钮
     try:
-        # 先保存当前页面URL，用于判断导航是否成功
-        current_url = driver.current_url
-        current_content_hash = hash(driver.page_source[:1000])  # 使用页面内容哈希值帮助判断页面是否变化
-        
-        # 保存导航前的截图
-        save_debug_screenshot(driver, f"before_navigate_to_page_{page_num}.png")
-        
-        # 尝试点击指定页码按钮
-        navigation_successful = False
-        
-        # 更多的分页按钮选择器
-        pagination_selectors = [
-            ".paginationjs-pages .paginationjs-page",
-            ".pagination .page-item", 
-            ".be-pager-item", 
-            ".pages .page-item",
-            ".page-wrap .page-item",
-            ".page-box .page",
-            "[class*='pagination'] [class*='page']",
-            "[class*='pager'] [class*='item']",
-            ".page-num",
-            "li[data-page]"
-        ]
-        
-        # 组合选择器为一个大查询
-        combined_selector = ', '.join(pagination_selectors)
-        
-        print(f"查找页码按钮，选择器: {combined_selector}")
-        page_btns = driver.find_elements(By.CSS_SELECTOR, combined_selector)
-        print(f"找到 {len(page_btns)} 个潜在页码按钮")
-        
-        # 查看所有按钮的文本以便调试
-        for i, btn in enumerate(page_btns):
+        # 访问API URL
+        for page in range(1, 5):  # 尝试获取前5页
+            api_url = f"https://api.bilibili.com/x/space/arc/search?mid={up_id}&ps=30&tid=0&pn={page}&keyword=&order=pubdate"
+            print(f"请求API: {api_url}")
+
+            driver.get(api_url)
+            time.sleep(3)
+
+            # 尝试解析JSON响应
             try:
-                btn_text = btn.text.strip()
-                print(f"按钮 {i+1}: 文本='{btn_text}'")
-            except:
-                print(f"按钮 {i+1}: 无法获取文本")
-        
-        # 点击指定页码
-        found = False
-        for btn in page_btns:
-            try:
-                btn_text = btn.text.strip()
-                if btn_text == str(page_num):
-                    print(f"找到第{page_num}页按钮，尝试点击...")
-                    
-                    # 尝试滚动到按钮位置
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
-                    time.sleep(1)
-                    
-                    # 尝试多种点击方法
-                    try:
-                        # 方法1: 直接点击
-                        print("尝试直接点击...")
-                        btn.click()
-                    except:
-                        try:
-                            # 方法2: JavaScript点击
-                            print("直接点击失败，尝试JavaScript点击...")
-                            driver.execute_script("arguments[0].click();", btn)
-                        except:
-                            # 方法3: 模拟点击事件
-                            print("JavaScript点击失败，尝试模拟点击事件...")
-                            driver.execute_script("""
-                                var event = new MouseEvent('click', {
-                                    'view': window,
-                                    'bubbles': true,
-                                    'cancelable': true
-                                });
-                                arguments[0].dispatchEvent(event);
-                            """, btn)
-                    
-                    found = True
-                    print(f"已尝试点击第{page_num}页按钮，等待页面加载...")
-                    time.sleep(5)  # 等待页面加载
+                pre_element = driver.find_element(By.TAG_NAME, "pre")
+                json_text = pre_element.text
+                data = json.loads(json_text)
+
+                if data.get('code') == 0 and 'data' in data and 'list' in data['data'] and 'vlist' in data['data'][
+                    'list']:
+                    vlist = data['data']['list']['vlist']
+
+                    if not vlist:
+                        print(f"API第{page}页没有数据，停止请求")
+                        break
+
+                    for video in vlist:
+                        bvid = video.get('bvid')
+                        if bvid:
+                            videos.append({
+                                'bvid': bvid,
+                                'title': video.get('title', '未知标题'),
+                                'link': f"https://www.bilibili.com/video/{bvid}"
+                            })
+                            print(f"API获取视频: {bvid}")
+                else:
+                    print(f"API返回错误或无数据: {data.get('message')}")
                     break
             except Exception as e:
-                print(f"处理按钮时出错: {e}")
-                continue
-        
-        # 如果没找到指定页码按钮，尝试点击"下一页"按钮
-        if not found and page_num == 2:  # 只在第2页时尝试"下一页"按钮
-            print("未找到指定页码按钮，尝试点击'下一页'按钮...")
-            next_selectors = [
-                ".next", ".next-page", ".paginationjs-next", 
-                "[class*='next']", ".pagination-next",
-                "button.nav-btn.iconfont.icon-arrowdown2", 
-                "a.nav-btn.iconfont.icon-arrowdown2"
-            ]
-            combined_next = ', '.join(next_selectors)
-            
-            next_btns = driver.find_elements(By.CSS_SELECTOR, combined_next)
-            for btn in next_btns:
-                try:
-                    if btn.is_displayed():
-                        print(f"找到'下一页'按钮: {btn.get_attribute('class')}")
-                        # 尝试滚动到按钮位置
-                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
-                        time.sleep(1)
-                        
-                        # 尝试点击
-                        driver.execute_script("arguments[0].click();", btn)
-                        found = True
-                        print("已点击'下一页'按钮，等待页面加载...")
-                        time.sleep(5)
-                        break
-                except Exception as e:
-                    print(f"点击'下一页'按钮时出错: {e}")
-                    continue
-        
-        # 验证导航是否成功
-        new_url = driver.current_url
-        new_content_hash = hash(driver.page_source[:1000])
-        
-        # 保存导航后的截图
-        save_debug_screenshot(driver, f"after_navigate_to_page_{page_num}.png")
-        
-        # 检查URL是否改变或包含页码参数
-        url_changed = (new_url != current_url)
-        has_page_param = (f"page={page_num}" in new_url)
-        content_changed = (new_content_hash != current_content_hash)
-        
-        print(f"验证导航结果: URL改变={url_changed}, 包含页码参数={has_page_param}, 内容改变={content_changed}")
-        
-        # 如果页面内容变化，或URL变化且有页码参数，认为导航成功
-        navigation_successful = content_changed or (url_changed and has_page_param)
-        
-        # 尝试通过页面内容进一步验证
-        if navigation_successful or found:
-            # 查找当前页码指示器
-            try:
-                current_page_indicators = driver.find_elements(By.CSS_SELECTOR, 
-                                                            ".paginationjs-page.active, .page-item.active, .be-pager-item.active, [class*='page'][class*='active'], .page-current")
-                for indicator in current_page_indicators:
-                    if indicator.is_displayed() and indicator.text.strip() == str(page_num):
-                        print(f"找到当前页码指示器，确认已在第{page_num}页")
-                        return True
-            except:
-                pass
-                
-            # 如果导航看起来成功但找不到页码指示器，仍然返回True
-            if navigation_successful:
-                print(f"页面已变化，认为导航到第{page_num}页成功")
-                return True
-                
-            # 如果点击成功但没有明确证据表明页面变化，也返回True
-            if found:
-                print(f"已点击按钮，但无法确认是否成功导航到第{page_num}页")
-                return True
-                
-        # 最后一次尝试：查找页面上是否有明确显示当前是第几页
-        try:
-            # 查找页面上显示"第X页"或"共Y页"等文本
-            page_texts = driver.find_elements(By.XPATH, "//*[contains(text(), '页') or contains(text(), 'page')]")
-            for elem in page_texts:
-                text = elem.text
-                if str(page_num) in text and ('页' in text or 'page' in text):
-                    print(f"从页面文本'{text}'确认已在第{page_num}页")
-                    return True
-        except:
-            pass
-        
-        print(f"无法确认是否成功导航到第{page_num}页")
-        return False
-            
-    except Exception as e:
-        print(f"点击分页按钮导航失败: {e}")
-        traceback.print_exc()
-        return False
+                print(f"解析API响应失败: {e}")
+                break
 
+            # 随机延迟
+            time.sleep(random.uniform(1, 3))
 
-def close_login_popup(driver):
-    """尝试关闭登录弹窗"""
-    try:
-        # 多种可能的关闭按钮选择器
-        close_selectors = [
-            ".login-panel-close", 
-            ".close", 
-            ".login-close", 
-            "[class*='close']",
-            ".btn-close",
-            ".dialog-close",
-            ".popup-close-btn",
-            "[title='关闭']",
-            "button.close"
-        ]
-        
-        for selector in close_selectors:
-            try:
-                close_btns = driver.find_elements(By.CSS_SELECTOR, selector)
-                for btn in close_btns:
-                    if btn.is_displayed():
-                        print(f"发现登录弹窗，尝试关闭... ({selector})")
-                        driver.execute_script("arguments[0].click();", btn)
-                        time.sleep(1)
-                        return True
-            except:
-                continue
-                
-        # 如果没找到明确的关闭按钮，尝试按Escape键关闭
-        try:
-            # 检查是否有遮罩层或模态框
-            overlays = driver.find_elements(By.CSS_SELECTOR, 
-                                          ".mask, .modal, .overlay, .dialog, [class*='mask'], [class*='modal']")
-            if any(overlay.is_displayed() for overlay in overlays):
-                print("检测到遮罩层或弹窗，尝试按Escape键关闭...")
-                from selenium.webdriver.common.keys import Keys
-                from selenium.webdriver.common.action_chains import ActionChains
-                
-                actions = ActionChains(driver)
-                actions.send_keys(Keys.ESCAPE)
-                actions.perform()
-                time.sleep(1)
-                return True
-        except:
-            pass
-            
-        return False
     except Exception as e:
-        print(f"尝试关闭登录弹窗时出错: {e}")
-        return False
+        print(f"API获取视频列表失败: {e}")
+
+    print(f"API总共获取到 {len(videos)} 个视频")
+    return videos
 
 
 def save_video_links(videos, filename="video_links.txt"):
@@ -1203,19 +927,36 @@ def extract_user_id(url):
 
 
 def main():
-    # 请替换为实际的UP主主页链接
-    up_main_url = "https://space.bilibili.com/636146813/upload/video"
-
-    # 提取UP主ID - 注意修正路径为标准的/video而非/upload/video
-    user_id = extract_user_id(up_main_url)
+    """程序入口点"""
+    print("=" * 50)
+    print("B站UP主视频链接提取工具")
+    print("=" * 50)
+    
+    # 用户输入UP主ID或链接
+    up_input = input("请输入UP主ID或主页链接: ").strip()
+    
+    # 判断输入是纯数字ID还是链接
+    if up_input.isdigit():
+        user_id = up_input
+    else:
+        # 从链接中提取ID
+        user_id = extract_user_id(up_input)
+        
     if not user_id:
-        print("无效的B站UP主链接")
+        print("无效的B站UP主ID或链接")
         return
 
     print(f"开始提取UP主 {user_id} 的视频链接")
+    
+    # 询问是否使用保存的Cookies
+    use_saved_cookies = True
+    cookies_input = input("是否使用保存的Cookies尝试登录? (y/n, 默认y): ").lower()
+    if cookies_input == 'n':
+        use_saved_cookies = False
 
     # 获取视频
-    videos = get_bilibili_videos(user_id)
+    cookies_path = r"C:\Users\DELL\Desktop\bilibili.txt"
+    videos = get_bilibili_videos(user_id, use_cookies=use_saved_cookies, cookies_path=cookies_path)
 
     # 去重
     unique_videos = []
@@ -1228,7 +969,7 @@ def main():
 
     if unique_videos:
         # 保存视频链接
-        save_video_links(unique_videos)
+        save_video_links(unique_videos, f"up_{user_id}_videos.txt")
         print(f"成功提取 {len(unique_videos)} 个不重复视频链接")
     else:
         print("未能提取到任何视频链接")
