@@ -71,7 +71,7 @@ CONFIG = {
     "output_base": r"H:\0423音效乐器采集\Justin Johnson",  # 下载根目录
     "log_path": r"C:\Users\DELL\Desktop\视频裁剪\logs",  # 日志目录
     "max_retries": 3,  # 单个视频最大重试次数
-    "max_workers": 4,  # 并行下载数量
+    "max_workers": 5,  # 并行下载数量
     "timeout": 600,  # 下载超时(秒)
     "downloaded_record": r"C:\Users\DELL\Desktop\视频裁剪\downloaded_videos.json",  # 已下载视频记录文件
     "url_list_file": r"C:\Users\DELL\Desktop\Justin Johnson.txt",  # URL列表文件路径
