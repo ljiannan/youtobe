@@ -5,7 +5,7 @@ import re
 
 # ====================== 用户配置区 ======================
 # 只需填写合集页面URL（支持新版/lists/4512129?type=season 和老版/channel/seriesdetail?sid=xxx）
-COLLECTION_URL = "https://space.bilibili.com/1399189030/upload/video"
+COLLECTION_URL = "https://space.bilibili.com/12496236/lists/5318264?type=season"
 # 必须填写你的B站cookie（建议用Chrome插件导出，粘贴到此处，注意不要换行）
 COOKIE = r"C:\Users\DELL\Desktop\bilibili.txt"  # 例：'SESSDATA=xxx; bili_jct=xxx; ...'
 # 输出文件名（当前目录下）
